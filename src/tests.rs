@@ -387,3 +387,43 @@ end:
 
     run_test_program_with_memory(test_program, 5000, &expected_memory)
 }
+
+#[test]
+fn test_memory_high_regs() -> Result<(), Box<dyn Error>> {
+    let program = "\
+        LOADI r4 42     ;Load value 42 into r4
+        LOADI r5 80     ;Load address 80 into r5
+        STORE r5 r4     ;Store r4's value at address in r5
+        LOADI r6 0      ;Clear r6
+        LOAD r6 r5      ;Load value from address in r5 into r6
+        LOADI r7 81     ;Load address 81 into r7
+        STORE r7 r6     ;Store r6's value at address in r7
+    ";
+
+    run_test_program_with_memory(program, 100, &[
+        (80, 42),   // First store
+        (81, 42)    // Second store
+    ])
+}
+
+#[test]
+fn test_loadw() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        ; Test loading 16-bit values
+        LOADW r0 0x1234   ; Load 0x1234 into r0
+        LOADW r1 1000     ; Load decimal 1000 into r1
+        LOADW r2 0xFFFF   ; Load max value into r2
+        LOADI r3 0        ; Set up memory address
+        STORE r3 r0       ; Store r0 to verify value
+    ";
+
+    let expected_states = [
+        (4, &[0x1234, 0, 0, 0]),      // After first LOADW
+        (8, &[0x1234, 1000, 0, 0]),   // After second LOADW
+        (12, &[0x1234, 1000, 0xFFFF, 0]), // After third LOADW
+        (14, &[0x1234, 1000, 0xFFFF, 0]), // After LOADI
+        (16, &[0x1234, 1000, 0xFFFF, 0]), // After STORE
+    ];
+
+    run_test_program(test_program, 500, &expected_states)
+}

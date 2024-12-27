@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 
 type LabelMap = HashMap<String, usize>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Nop,
     Add { dest: u8, src: u8 },
@@ -15,19 +15,16 @@ pub enum Instruction {
     Store { addr: u8, src: u8 },
     Load { dest: u8, src: u8 },
     Jz { reg: u8, addr: u8 },
+    LoadW { dest: u8, imm: u16 },
     Invalid,
 }
 
 fn parse_register(reg_str: &str) -> Result<u8, Box<dyn Error>> {
     let reg_str = reg_str.to_uppercase();
-    if !reg_str.starts_with('R') {
-        return Err(format!("Register must start with 'r' or 'R': '{}'", reg_str).into());
-    }
+    assert!(reg_str.starts_with('R'), "Register must start with 'r' or 'R': '{}'", reg_str);
     let num_str = &reg_str[1..];
     let reg_num = num_str.parse::<u8>()?;
-    if reg_num >= 4 {
-        return Err(format!("Register index must be 0-3: '{}'", reg_str).into());
-    }
+    assert!(reg_num < 8, "Register index must be 0-15: '{}'", reg_str);
     Ok(reg_num)
 }
 
@@ -81,6 +78,18 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
             let imm = parse_immediate(parts[2], labels)?;
             Ok(Instruction::LoadI { dest, imm })
         }
+        "LOADW" => {
+            assert!(parts.len() == 3, "LOADW requires a register and 16-bit immediate value");
+            let dest = parse_register(parts[1])?;
+            // Parse immediate as 16-bit value
+            let imm_str = parts[2];
+            let imm = if imm_str.starts_with("0x") {
+                u16::from_str_radix(imm_str.trim_start_matches("0x"), 16)
+            } else {
+                imm_str.parse::<u16>()
+            }.map_err(|_| format!("Invalid 16-bit immediate value: {}", imm_str))?;
+            Ok(Instruction::LoadW { dest, imm })
+        }
         "STORE" => {
             assert!(parts.len() == 3, "STORE requires a register for address and a register for value");
             let addr = parse_register(parts[1])?;
@@ -107,46 +116,52 @@ fn encode_instruction(inst: Instruction) -> u16 {
             0b0000u64                   // NOP opcode (0x0)
         }
         Instruction::Add { dest, src } => {
-            ((0u64) << 8) |             // immediate
-            ((src as u64) << 6) |       // reg_src
-            ((dest as u64) << 4) |      // reg_dest
+            ((0u64) << 8) |             // immediate (unused)
+            ((src as u64) << 8) |       // reg_src (4 bits)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b0001u64)                 // ADD opcode (0x1)
         }
         Instruction::Sub { dest, src } => {
-            ((0u64) << 8) |             // immediate
-            ((src as u64) << 6) |       // reg_src
-            ((dest as u64) << 4) |      // reg_dest
+            ((0u64) << 8) |             // immediate (unused)
+            ((src as u64) << 8) |       // reg_src (4 bits)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b0010u64)                 // SUB opcode (0x2)
         }
         Instruction::Mul { dest, src } => {
-            ((0u64) << 8) |             // immediate
-            ((src as u64) << 6) |       // reg_src
-            ((dest as u64) << 4) |      // reg_dest
+            ((0u64) << 8) |             // immediate (unused)
+            ((src as u64) << 8) |       // reg_src (4 bits)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b0011u64)                 // MUL opcode (0x3)
         }
         Instruction::LoadI { dest, imm } => {
             ((imm as u64) << 8) |       // immediate
-            ((0u64) << 6) |             // reg_src (unused)
-            ((dest as u64) << 4) |      // reg_dest
+            ((0u64) << 8) |             // reg_src (unused)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b1000u64)                 // LOADI opcode (0x8)
         }
         Instruction::Store { addr, src } => {
             ((0u64) << 8) |             // immediate (unused)
-            ((src as u64) << 6) |       // reg_src (value to store)
+            ((src as u64) << 8) |       // reg_src (value to store)
             ((addr as u64) << 4) |      // reg_dest (address)
             (0b1001u64)                 // STORE opcode (0x9)
         }
         Instruction::Load { dest, src } => {
             ((0u64) << 8) |             // immediate (unused)
-            ((src as u64) << 6) |       // reg_src (address)
+            ((src as u64) << 8) |       // reg_src (address)
             ((dest as u64) << 4) |      // reg_dest
             (0b1011u64)                 // LOAD opcode (0xB)
         }
         Instruction::Jz { reg, addr } => {
             ((addr as u64) << 8) |      // immediate (jump address)
-            ((reg as u64) << 6) |       // reg_src (register to check)
-            ((0u64) << 4) |             // reg_dest (unused)
+            ((0u64) << 8) |             // reg_src (unused)
+            ((reg as u64) << 4) |       // reg_dest (register to check)
             (0b1100u64)                 // JZ opcode (0xC)
+        }
+        Instruction::LoadW { dest, imm: _ } => {
+            ((0u64) << 8) |             // immediate (unused in first word)
+            ((0u64) << 8) |             // reg_src (unused)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
+            (0b1101u64)                 // LOADW opcode (0xD)
         }
         Instruction::Invalid => {
             0b1111u64                   // INVALID opcode (0xF)
@@ -233,7 +248,12 @@ pub fn assemble(program: &str) -> Result<Vec<u16>, Box<dyn Error>> {
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if !parts.is_empty() {
-            current_instruction_addr += 2; // Each instruction is 2 bytes
+            // Account for LOADW taking 2 words
+            if parts[0].to_uppercase() == "LOADW" {
+                current_instruction_addr += 4;
+            } else {
+                current_instruction_addr += 2;
+            }
         }
     }
 
@@ -287,8 +307,13 @@ pub fn assemble(program: &str) -> Result<Vec<u16>, Box<dyn Error>> {
         }
 
         let inst = parse_instruction(&parts, &labels)?;
-        let encoded = encode_instruction(inst);
+        let encoded = encode_instruction(inst.clone());
         instructions.push(encoded);
+        
+        // For LOADW, add the immediate value as a second word
+        if let Instruction::LoadW { imm, .. } = inst {
+            instructions.push(imm);
+        }
     }
 
     // Check for overlaps between instructions and data sections
