@@ -11,6 +11,7 @@ pub enum Instruction {
     Add { dest: u8, src: u8 },
     Sub { dest: u8, src: u8 },
     Mul { dest: u8, src: u8 },
+    AddI { dest: u8, imm: u8 },
     LoadI { dest: u8, imm: u8 },
     Store { addr: u8, src: u8 },
     Load { dest: u8, src: u8 },
@@ -72,6 +73,12 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
                 _ => unreachable!()
             }
         }
+        "ADDI" => {
+            assert!(parts.len() == 3, "ADDI requires a register and immediate value");
+            let dest = parse_register(parts[1])?;
+            let imm = parse_immediate(parts[2], labels)?;
+            Ok(Instruction::AddI { dest, imm })
+        }
         "LOADI" => {
             assert!(parts.len() == 3, "LOADI requires a register and immediate value");
             let dest = parse_register(parts[1])?;
@@ -106,7 +113,7 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
             assert!(parts.len() == 1, "INVALID takes no arguments");
             Ok(Instruction::Invalid)
         }
-        _ => Err(err!("Unknown instruction"))
+        _ => Err(err!(format!("Unknown instruction: {}", parts[0])))
     }
 }
 
@@ -120,6 +127,12 @@ fn encode_instruction(inst: Instruction) -> u16 {
             ((src as u64) << 8) |       // reg_src (4 bits)
             ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b0001u64)                 // ADD opcode (0x1)
+        }
+        Instruction::AddI { dest, imm } => {
+            ((imm as u64) << 8) |       // immediate
+            ((0u64) << 8) |             // reg_src (unused)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
+            (0b0100u64)                 // ADDI opcode (0x4)
         }
         Instruction::Sub { dest, src } => {
             ((0u64) << 8) |             // immediate (unused)

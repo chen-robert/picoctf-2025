@@ -1,5 +1,5 @@
 use std::error::Error;
-use verilog_ctf::simulator::run_program;
+use verilog_ctf::simulator::{run_program, MEM_SIZE};
 
 mod tests;
 
@@ -35,17 +35,16 @@ inner:
         LOAD r0 r0 
         LOAD r1 r1 
 
-        NAND r0 r1 ; TODO implement
+        ADD r0 r1 ; TODO implement
         STORE r2 r0
         
         LOADI r7 0 
         JZ r0 start
 
 end:
-
-
     ";
 
-    run_program(program, 100)
+    let mut mem = [0u8; MEM_SIZE];
+    run_program(program, 100, &mut mem)
 }
 

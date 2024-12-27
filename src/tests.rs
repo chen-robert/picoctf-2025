@@ -427,3 +427,22 @@ fn test_loadw() -> Result<(), Box<dyn Error>> {
 
     run_test_program(test_program, 500, &expected_states)
 }
+
+#[test]
+fn test_addi() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        LOADI r0 5      ; r0 = 5
+        ADDI r0 3       ; r0 = 8
+        LOADI r1 10     ; r1 = 10
+        ADDI r1 255     ; r1 = 265
+    ";
+
+    let expected_states = [
+        (2, &[5, 0, 0, 0]),    // After first LOADI
+        (4, &[8, 0, 0, 0]),    // After ADDI
+        (6, &[8, 10, 0, 0]),   // After second LOADI
+        (8, &[8, 265, 0, 0]),  // After second ADDI (no overflow since 16-bit)
+    ];
+
+    run_test_program(test_program, 100, &expected_states)
+}
