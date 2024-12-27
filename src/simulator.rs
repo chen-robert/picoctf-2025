@@ -167,6 +167,8 @@ pub fn run_test_program(program: &str, cycles: usize, expected_states: &[(usize,
         state.set(second_byte.iter(), high_byte)?;
     }
 
+    assert!(current_state_idx == expected_states.len(), "Expected states not reached");
+
     Ok(())
 }
 
