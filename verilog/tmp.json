@@ -1,0 +1,39 @@
+{
+  "creator": "Yosys 0.47 (git sha1 647d61dd9, clang++ 16.0.0 -fPIC -O3)",
+  "modules": {
+    "rom": {
+      "attributes": {
+        "hdlname": "rom",
+        "src": "./test.v:1.1-32.10"
+      },
+      "ports": {
+        "addr": {
+          "direction": "input",
+          "bits": [ 2, 3, 4, 5 ]
+        },
+        "data": {
+          "direction": "output",
+          "bits": [ 2, 3, 4, 5, 2, 3, 4, 5 ]
+        }
+      },
+      "cells": {
+      },
+      "netnames": {
+        "addr": {
+          "hide_name": 0,
+          "bits": [ 2, 3, 4, 5 ],
+          "attributes": {
+            "src": "./test.v:2.22-2.26"
+          }
+        },
+        "data": {
+          "hide_name": 0,
+          "bits": [ 2, 3, 4, 5, 2, 3, 4, 5 ],
+          "attributes": {
+            "src": "./test.v:3.22-3.26"
+          }
+        }
+      }
+    }
+  }
+}
