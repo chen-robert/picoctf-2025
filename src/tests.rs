@@ -1,5 +1,5 @@
 use std::error::Error;
-use verilog_ctf::simulator::run_test_program;
+use verilog_ctf::simulator::{run_test_program, run_test_program_with_memory};
 
 #[test]
 fn test_nop() -> Result<(), Box<dyn Error>> {
@@ -289,13 +289,13 @@ fn test_jz() -> Result<(), Box<dyn Error>> {
     let test_program = "\
         ; Test JZ when register is zero
         LOADI r0 0      ; R0 = 0
-        JZ r0 4        ; Should jump to instruction at PC 8 (4 * 2)
+        JZ r0 8        ; Should jump to instruction at PC 8 (4 * 2)
         LOADI r1 42    ; Should be skipped
         LOADI r1 123   ; Should be executed (at PC 8)
         
         ; Test JZ when register is non-zero
         LOADI r0 1     ; R0 = 1
-        JZ r0 4        ; Should not jump since R0 != 0
+        JZ r0 8        ; Should not jump since R0 != 0
         LOADI r2 42    ; Should be executed
     ";
 
@@ -308,4 +308,82 @@ fn test_jz() -> Result<(), Box<dyn Error>> {
     ];
 
     run_test_program(test_program, 500, &expected_states)
+}
+
+#[test]
+fn test_labels() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        ; Test forward and backward jumps with labels
+        LOADI r0 0      ; R0 = 0
+        JZ r0 skip      ; Should jump to skip label
+        LOADI r1 42     ; Should be skipped
+skip:   
+        LOADI r1 123    ; Should be executed
+        LOADI r0 1      ; R0 = 1
+        JZ r0 skip      ; Should not jump since R0 != 0
+        LOADI r2 skip     ; Should be executed
+    ";
+
+    let expected_states = [
+        (2, &[0, 0, 0, 0]),      // After first LOADI r0 0
+        (6, &[0, 0, 0, 0]),      // After JZ (jumped to skip label)
+        (8, &[0, 123, 0, 0]),   // After LOADI r1 123
+        (10, &[1, 123, 0, 0]),   // After LOADI r0 1
+        (12, &[1, 123, 0, 0]),   // After JZ (no jump since R0 = 1)
+        (14, &[1, 123, 6, 0]),  // After LOADI r2 42
+    ];
+
+    run_test_program(test_program, 500, &expected_states)
+}
+
+#[test]
+fn test_fibonacci() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        ; Initialize registers
+        LOADI r0 0      ; First number (0)
+        LOADI r1 1      ; Second number (1)
+        LOADI r2 0x80   ; Base address
+
+        STORE r2 r0
+
+        LOADI r3 2
+        ADD r2 r3
+
+        STORE r2 r1
+
+start:
+        ADD r1 r0
+        LOAD r0 r2
+
+        LOADI r3 2
+        ADD r2 r3
+
+        STORE r2 r1
+
+        LOADI r3 0xc0
+        SUB r3 r2
+
+        JZ r3 end
+
+        LOADI r3 0
+        JZ r3 start
+end:
+    ";
+
+    // Calculate first 32 Fibonacci numbers mod 65536
+    let mut expected_memory = Vec::new();
+    let mut a: u16 = 0;  // F(0)
+    let mut b: u16 = 1;  // F(1)
+    
+    for i in 0..32 {
+        // Each 16-bit value needs to be stored as two 8-bit values in little-endian order
+        let addr = 0x80 + i * 2;  // Each number takes 2 bytes
+        expected_memory.push((addr, (a & 0xFF) as u8));  // Lower byte
+        expected_memory.push((addr + 1, ((a >> 8) & 0xFF) as u8));  // Upper byte
+        let c = a.wrapping_add(b);  // Next Fibonacci number mod 65536
+        a = b;
+        b = c;
+    }
+
+    run_test_program_with_memory(test_program, 5000, &expected_memory)
 }

@@ -1,6 +1,9 @@
 use crate::err;
 use std::error::Error;
 use std::collections::HashMap;
+use std::convert::TryFrom;
+
+type LabelMap = HashMap<String, usize>;
 
 #[derive(Debug)]
 pub enum Instruction {
@@ -18,22 +21,30 @@ pub enum Instruction {
 fn parse_register(reg_str: &str) -> Result<u8, Box<dyn Error>> {
     let reg_str = reg_str.to_uppercase();
     if !reg_str.starts_with('R') {
-        return Err(err!("Register must start with 'r' or 'R'"));
+        return Err(format!("Register must start with 'r' or 'R': '{}'", reg_str).into());
     }
     let num_str = &reg_str[1..];
     let reg_num = num_str.parse::<u8>()?;
     if reg_num >= 4 {
-        return Err(err!("Register index must be 0-3"));
+        return Err(format!("Register index must be 0-3: '{}'", reg_str).into());
     }
     Ok(reg_num)
 }
 
-fn parse_immediate(imm_str: &str) -> Result<u8, Box<dyn Error>> {
+fn parse_immediate(imm_str: &str, labels: &LabelMap) -> Result<u8, Box<dyn Error>> {
+    // First check if it's a label
+    if let Some(&addr) = labels.get(imm_str) {
+        // Convert byte address to instruction count (each instruction is 2 bytes)
+        // The jump target should be addr/2 since each instruction is 2 bytes
+        return Ok(u8::try_from(addr).unwrap());
+    }
+    
+    // Otherwise parse as number
     if imm_str.starts_with("0x") {
         u8::from_str_radix(imm_str.trim_start_matches("0x"), 16)
     } else {
         imm_str.parse::<u8>()
-    }.map_err(|_| err!("Invalid immediate value"))
+    }.map_err(|_| format!("Invalid immediate value: {}", imm_str).into())
 }
 
 fn parse_data_address(addr_str: &str) -> Result<usize, Box<dyn Error>> {
@@ -46,7 +57,7 @@ fn parse_data_value(value_str: &str) -> Result<u16, Box<dyn Error>> {
         .map_err(|_| err!("Invalid hex data"))
 }
 
-fn parse_instruction(parts: &[&str]) -> Result<Instruction, Box<dyn Error>> {
+fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, Box<dyn Error>> {
     match parts[0].to_uppercase().as_str() {
         "NOP" => {
             assert!(parts.len() == 1, "NOP takes no arguments");
@@ -67,7 +78,7 @@ fn parse_instruction(parts: &[&str]) -> Result<Instruction, Box<dyn Error>> {
         "LOADI" => {
             assert!(parts.len() == 3, "LOADI requires a register and immediate value");
             let dest = parse_register(parts[1])?;
-            let imm = parse_immediate(parts[2])?;
+            let imm = parse_immediate(parts[2], labels)?;
             Ok(Instruction::LoadI { dest, imm })
         }
         "STORE" => {
@@ -79,7 +90,7 @@ fn parse_instruction(parts: &[&str]) -> Result<Instruction, Box<dyn Error>> {
         "JZ" => {
             assert!(parts.len() == 3, "JZ requires a register and an address");
             let reg = parse_register(parts[1])?;
-            let addr = parse_immediate(parts[2])?;
+            let addr = parse_immediate(parts[2], labels)?;
             Ok(Instruction::Jz { reg, addr })
         }
         "INVALID" => {
@@ -175,9 +186,62 @@ fn merge_instructions_and_data(instructions: Vec<u16>, data_sections: HashMap<us
 pub fn assemble(program: &str) -> Result<Vec<u16>, Box<dyn Error>> {
     let mut instructions = Vec::new();
     let mut data_sections: HashMap<usize, u16> = HashMap::new();
+    let mut labels: LabelMap = HashMap::new();
     let mut in_data_section = false;
     let mut current_data_addr = 0;
+    let mut current_instruction_addr = 0;
 
+    // First pass: collect labels
+    for line in program.lines() {
+        // Remove comments
+        let line = match line.find(';') {
+            Some(idx) => &line[..idx],
+            None => line,
+        };
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Check for data section directive
+        if line.starts_with(".data") {
+            in_data_section = true;
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() != 2 {
+                return Err(err!(".data directive requires an address"));
+            }
+            current_data_addr = parse_data_address(parts[1])?;
+            continue;
+        }
+
+        if line == ".text" {
+            in_data_section = false;
+            continue;
+        }
+
+        if in_data_section {
+            current_data_addr += 2; // Each data value is 2 bytes
+            continue;
+        }
+
+        // Check for label (ends with :)
+        if line.ends_with(':') {
+            let label = line[..line.len()-1].trim().to_string();
+            labels.insert(label, current_instruction_addr);
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if !parts.is_empty() {
+            current_instruction_addr += 2; // Each instruction is 2 bytes
+        }
+    }
+
+    // Reset for second pass
+    in_data_section = false;
+    current_data_addr = 0;
+
+    // Second pass: assemble instructions with label resolution
     for line in program.lines() {
         // Remove comments
         let line = match line.find(';') {
@@ -212,12 +276,17 @@ pub fn assemble(program: &str) -> Result<Vec<u16>, Box<dyn Error>> {
             continue;
         }
 
+        // Skip label definitions in second pass
+        if line.ends_with(':') {
+            continue;
+        }
+
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.is_empty() {
             continue;
         }
 
-        let inst = parse_instruction(&parts)?;
+        let inst = parse_instruction(&parts, &labels)?;
         let encoded = encode_instruction(inst);
         instructions.push(encoded);
     }
@@ -226,6 +295,6 @@ pub fn assemble(program: &str) -> Result<Vec<u16>, Box<dyn Error>> {
     let instruction_range = 0..(instructions.len() * 2); // Each instruction is 2 bytes
     check_data_overlap(instruction_range, &data_sections)?;
 
-    // Merge instructions and data sections
+    // Merge instructions and data
     merge_instructions_and_data(instructions, data_sections)
 } 
