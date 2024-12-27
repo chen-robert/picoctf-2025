@@ -446,3 +446,37 @@ fn test_addi() -> Result<(), Box<dyn Error>> {
 
     run_test_program(test_program, 100, &expected_states)
 }
+
+#[test]
+fn test_and() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        LOADW r0 0xFF00  ; r0 = 0xFF00
+        LOADW r1 0xF0F0  ; r1 = 0xF0F0
+        AND r0 r1        ; r0 = 0xF000
+    ";
+
+    let expected_states = [
+        (4, &[0xFF00, 0, 0, 0]),      // After first LOADW
+        (8, &[0xFF00, 0xF0F0, 0, 0]), // After second LOADW
+        (10, &[0xF000, 0xF0F0, 0, 0]), // After AND
+    ];
+
+    run_test_program(test_program, 100, &expected_states)
+}
+
+#[test]
+fn test_nand() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        LOADW r0 0xFF00  ; r0 = 0xFF00
+        LOADW r1 0xF0F0  ; r1 = 0xF0F0
+        NAND r0 r1       ; r0 = ~(0xFF00 & 0xF0F0) = ~0xF000 = 0x0FFF
+    ";
+
+    let expected_states = [
+        (4, &[0xFF00, 0, 0, 0]),     // After first LOADW
+        (8, &[0xFF00, 0xF0F0, 0, 0]), // After second LOADW
+        (10, &[0x0FFF, 0xF0F0, 0, 0]), // After NAND
+    ];
+
+    run_test_program(test_program, 500, &expected_states)
+}

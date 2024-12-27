@@ -117,6 +117,8 @@ pub fn run_test_program_with_expectations(
             let addr = state.get(addr_bits.iter())?;
             mem[usize::try_from(addr).unwrap()] = u8::try_from(out_val & 0xFF).unwrap();
             mem[usize::try_from(addr).unwrap() + 1] = u8::try_from((out_val >> 8) & 0xFF).unwrap();
+
+            println!("Wrote to memory: {:04x} = {:04x}", addr, out_val);
         }
 
         let addr = state.get(addr_bits.iter())?;

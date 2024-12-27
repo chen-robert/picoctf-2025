@@ -1,1 +1,3 @@
 /target
+verilog/output.json
+server/node_modules

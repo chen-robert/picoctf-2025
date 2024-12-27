@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAND Pachinko</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #60a5fa;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+        }
+
+        .description {
+            color: #94a3b8;
+            margin-bottom: 2rem;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.5;
+        }
+
+        #game-container {
+            width: 900px;
+            height: 600px;
+            margin: 0 auto;
+            background: #1e293b;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+                        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+        }
+
+        .node {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px rgba(255, 255, 255, 0.1) inset;
+            user-select: none;
+            touch-action: none;
+            will-change: transform, left, top;
+        }
+
+        .input-node {
+            background: #22c55e;
+            color: #fff;
+        }
+
+        .input-node:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+        }
+
+        .nand-node {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .nand-node:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .selected {
+            border: 3px solid #fbbf24;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .connection {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.3) 100%);
+            transform-origin: left center;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        #controls {
+            text-align: center;
+            margin: 20px 0;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15),
+                        0 3px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #reset-btn {
+            background: #ef4444;
+        }
+
+        #reset-btn:hover {
+            background: #dc2626;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .output-node {
+            background: #f97316;
+            color: #fff;
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        .output-node:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+        }
+
+        .output-node.snap-target {
+            box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
+            transform: translateX(-50%) scale(1.2);
+            transition: all 0.3s ease;
+        }
+
+        .goal-display {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+
+        .correct {
+            background: #22c55e;
+            animation: correct-pulse 1s infinite;
+        }
+
+        @keyframes correct-pulse {
+            0% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.6); }
+            100% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+        }
+
+        #goal-select {
+            margin: 0 10px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            background: #1e293b;
+            color: white;
+            border: 1px solid #3b82f6;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        #goal-select:hover {
+            border-color: #60a5fa;
+        }
+
+        .game-wrapper {
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        .truth-table {
+            background: #1e293b;
+            padding: 1.5rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            min-width: 300px;
+        }
+
+        .truth-table h2 {
+            margin: 0 0 1rem 0;
+            color: #60a5fa;
+            font-size: 1.5rem;
+        }
+
+        .truth-table table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+
+        .truth-table th, .truth-table td {
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .truth-table th {
+            background: #334155;
+            color: #94a3b8;
+        }
+
+        .truth-table td {
+            color: #fff;
+        }
+
+        .truth-table tr.current {
+            background: #1e40af;
+        }
+
+        .node {
+            cursor: move;
+            touch-action: none;
+        }
+
+        .node.dragging {
+            transition: none;
+            opacity: 0.8;
+            z-index: 1000;
+            transform: scale(1.1);
+            box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.4),
+                        0 0 0 2px rgba(255, 255, 255, 0.2) inset;
+        }
+
+        .ball {
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle at 30% 30%, #fbbf24, #d97706);
+            border-radius: 50%;
+            position: absolute;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+            z-index: 100;
+            will-change: transform, left, top;
+        }
+
+        .ball.moving {
+            transition: transform 0.5s linear;
+        }
+
+        #play-btn {
+            background: #fbbf24;
+            color: #1e293b;
+        }
+
+        #play-btn:hover {
+            background: #f59e0b;
+        }
+
+        #play-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>NAND Pachinko</h1>
+    <p class="description">
+        Build complex logic circuits using NAND gates! Connect nodes to create NAND gates and try to match the target outputs.
+        Drag nodes to rearrange them, and connect them to create your circuit.
+    </p>
+    <div id="controls">
+        <button id="reset-btn" onclick="resetGame()">Reset Circuit</button>
+        <button onclick="addInputNode()">Add Input Node</button>
+        <select id="goal-select" onchange="setGoal(this.value)">
+            <option value="xor">Build XOR Gate</option>
+            <option value="and">Build AND Gate</option>
+            <option value="or">Build OR Gate</option>
+        </select>
+        <button id="play-btn" onclick="playAnimation()">Play Animation</button>
+    </div>
+    <div class="game-wrapper">
+        <div id="game-container">
+            <div class="goal-display"></div>
+        </div>
+        <div class="truth-table">
+            <h2>Truth Table</h2>
+            <div id="truth-table-content"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedNode = null;
+        let nodes = [];
+        let connections = [];
+        let tooltip = null;
+        let currentGoal = 'xor';
+        let outputNodes = [];
+
+        const GOALS = {
+            xor: {
+                description: 'XOR Gate: Output should be 1 when inputs are different',
+                truthTable: [
+                    { inputs: [0, 0], output: 0 },
+                    { inputs: [0, 1], output: 1 },
+                    { inputs: [1, 0], output: 1 },
+                    { inputs: [1, 1], output: 0 }
+                ]
+            },
+            and: {
+                description: 'AND Gate: Output should be 1 only when both inputs are 1',
+                truthTable: [
+                    { inputs: [0, 0], output: 0 },
+                    { inputs: [0, 1], output: 0 },
+                    { inputs: [1, 0], output: 0 },
+                    { inputs: [1, 1], output: 1 }
+                ]
+            },
+            or: {
+                description: 'OR Gate: Output should be 1 when either input is 1',
+                truthTable: [
+                    { inputs: [0, 0], output: 0 },
+                    { inputs: [0, 1], output: 1 },
+                    { inputs: [1, 0], output: 1 },
+                    { inputs: [1, 1], output: 1 }
+                ]
+            }
+        };
+
+        function createTooltip() {
+            tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            document.body.appendChild(tooltip);
+        }
+
+        function showTooltip(node, event) {
+            const type = node.dataset.type === 'input' ? 'Input' : 
+                        node.dataset.type === 'output' ? 'Target Output' : 'NAND';
+            const value = node.dataset.value;
+            tooltip.textContent = `${type} Node: ${value}`;
+            tooltip.style.left = event.pageX + 10 + 'px';
+            tooltip.style.top = event.pageY + 10 + 'px';
+            tooltip.style.opacity = '1';
+        }
+
+        function hideTooltip() {
+            if (tooltip) tooltip.style.opacity = '0';
+        }
+
+        function createNode(x, y, value, type) {
+            const node = document.createElement('div');
+            node.className = `node ${type}-node`;
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.dataset.x = x;
+            node.dataset.y = y;
+            node.textContent = value;
+            node.dataset.value = value;
+            node.dataset.type = type;
+            node.id = 'node-' + Math.random().toString(36).substr(2, 9);
+            
+            node.addEventListener('mousedown', startDragging);
+            node.addEventListener('click', () => handleNodeClick(node));
+            node.addEventListener('mousemove', (e) => showTooltip(node, e));
+            node.addEventListener('mouseout', hideTooltip);
+            
+            document.getElementById('game-container').appendChild(node);
+            if (type === 'output') {
+                outputNodes.push(node);
+            } else {
+            nodes.push(node);
+            }
+            return node;
+        }
+
+        function handleNodeClick(node) {
+            if (!selectedNode) {
+                if (node.dataset.type !== 'output') {
+                selectedNode = node;
+                node.classList.add('selected');
+                }
+            } else if (selectedNode !== node) {
+                createConnection(selectedNode, node);
+                selectedNode.classList.remove('selected');
+                selectedNode = null;
+            }
+        }
+
+        function createConnection(node1, node2) {
+            if ((node1.dataset.type === 'input' || node1.dataset.type === 'nand') && 
+                (node2.dataset.type === 'input' || node2.dataset.type === 'nand' || node2.dataset.type === 'output')) {
+                if (node2.dataset.type === 'output') {
+                    // Direct connection to output
+                    node2.dataset.connectedTo = node1.id;
+                    drawConnection(node1, node2);
+                    node2.dataset.value = node1.dataset.value;
+                    node2.textContent = node1.dataset.value;
+                    checkCircuit();
+                } else {
+                    // Create NAND gate
+                const nandNode = createNandNode(node1, node2);
+                    nandNode.dataset.input1 = node1.id;
+                    nandNode.dataset.input2 = node2.id;
+                drawConnection(node1, nandNode);
+                drawConnection(node2, nandNode);
+                updateNandValue(nandNode, node1, node2);
+                }
+                updateTruthTable(); // Update truth table after connections change
+            }
+        }
+
+        function createNandNode(input1, input2) {
+            const x = (parseInt(input1.dataset.x) + parseInt(input2.dataset.x)) / 2;
+            const y = Math.max(parseInt(input1.dataset.y), parseInt(input2.dataset.y)) + 80;
+            return createNode(x, y, '1', 'nand');
+        }
+
+        function drawConnection(from, to) {
+            const connection = document.createElement('div');
+            connection.className = 'connection';
+            
+            const fromX = parseFloat(from.dataset.x) + from.offsetWidth/2;
+            const fromY = parseFloat(from.dataset.y) + from.offsetHeight/2;
+            const toX = parseFloat(to.dataset.x) + to.offsetWidth/2;
+            const toY = parseFloat(to.dataset.y) + to.offsetHeight/2;
+            
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
+            connection.style.width = length + 'px';
+            connection.style.left = fromX + 'px';
+            connection.style.top = fromY + 'px';
+            connection.style.transform = `rotate(${angle}deg)`;
+            
+            document.getElementById('game-container').appendChild(connection);
+            connections.push(connection);
+        }
+
+        function updateNandValue(nandNode, input1, input2) {
+            const val1 = parseInt(input1.dataset.value);
+            const val2 = parseInt(input2.dataset.value);
+            const nandResult = ~(val1 & val2) & 1;
+            nandNode.textContent = nandResult;
+            nandNode.dataset.value = nandResult;
+        }
+
+        function addInputNode() {
+            const x = Math.random() * 800 + 50;
+            const y = Math.random() * 100 + 50;
+            const value = Math.round(Math.random());
+            createNode(x, y, value, 'input');
+        }
+
+        function createOutputNodes() {
+            const containerWidth = 900;
+            const containerHeight = 600;
+            createNode(containerWidth/2 - 25, containerHeight - 80, '?', 'output');
+        }
+
+        function setGoal(goal) {
+            currentGoal = goal;
+            resetGame();
+            updateGoalDisplay();
+        }
+
+        function updateGoalDisplay() {
+            const goalDisplay = document.querySelector('.goal-display');
+            goalDisplay.textContent = GOALS[currentGoal].description;
+        }
+
+        function checkCircuit() {
+            const outputNode = outputNodes[0];
+            if (!outputNode || outputNode.dataset.value === '?') return;
+
+            const goal = GOALS[currentGoal];
+            const inputs = nodes.filter(n => n.dataset.type === 'input')
+                              .map(n => parseInt(n.dataset.value));
+            
+            // Find matching truth table entry
+            const entry = goal.truthTable.find(e => 
+                e.inputs.every((val, idx) => val === inputs[idx])
+            );
+
+            if (entry && parseInt(outputNode.dataset.value) === entry.output) {
+                outputNode.classList.add('correct');
+            } else {
+                outputNode.classList.remove('correct');
+            }
+        }
+
+        function resetGame() {
+            nodes.forEach(node => node.remove());
+            outputNodes.forEach(node => node.remove());
+            connections.forEach(conn => conn.remove());
+            nodes = [];
+            outputNodes = [];
+            connections = [];
+            selectedNode = null;
+
+            // Initialize with input nodes and output node
+            for (let i = 0; i < 2; i++) {
+                addInputNode();
+            }
+            createOutputNodes();
+            updateGoalDisplay();
+        }
+
+        // Add dragging state variables
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let dragTarget = null;
+
+        function startDragging(e) {
+            if (e.target.dataset.type === 'output') return; // Don't allow dragging output nodes
+            
+            dragTarget = e.target;
+            isDragging = true;
+            
+            const containerRect = document.getElementById('game-container').getBoundingClientRect();
+            const nodeRect = dragTarget.getBoundingClientRect();
+            
+            // Calculate the offset of the mouse within the node
+            initialX = e.clientX - nodeRect.left;
+            initialY = e.clientY - nodeRect.top;
+            
+            dragTarget.classList.add('dragging');
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDragging);
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            
+            e.preventDefault();
+            
+            const containerRect = document.getElementById('game-container').getBoundingClientRect();
+            
+            // Calculate new position relative to container, accounting for mouse offset within node
+            currentX = e.clientX - containerRect.left - initialX;
+            currentY = e.clientY - containerRect.top - initialY;
+            
+            // Constrain to container bounds
+            currentX = Math.max(0, Math.min(currentX, containerRect.width - dragTarget.offsetWidth));
+            currentY = Math.max(0, Math.min(currentY, containerRect.height - dragTarget.offsetHeight));
+            
+            // Check for snapping to output node
+            const outputNode = outputNodes[0];
+            const snapDistance = 50; // Distance in pixels for snapping
+            
+            if (dragTarget.dataset.type === 'nand') {
+                const outputRect = {
+                    x: parseFloat(outputNode.dataset.x),
+                    y: parseFloat(outputNode.dataset.y),
+                    width: outputNode.offsetWidth,
+                    height: outputNode.offsetHeight
+                };
+                
+                const distance = Math.sqrt(
+                    Math.pow(currentX - outputRect.x, 2) + 
+                    Math.pow(currentY - outputRect.y, 2)
+                );
+                
+                if (distance < snapDistance) {
+                    // Merge with output node
+                    outputNode.dataset.connectedTo = dragTarget.id;
+                    outputNode.dataset.value = dragTarget.dataset.value;
+                    outputNode.textContent = dragTarget.dataset.value;
+                    
+                    // Store the input nodes before removing the NAND node
+                    const input1 = nodes.find(n => n.id === dragTarget.dataset.input1);
+                    const input2 = nodes.find(n => n.id === dragTarget.dataset.input2);
+                    
+                    // Remove old connections
+                    connections.forEach(conn => conn.remove());
+                    connections = [];
+                    
+                    // Remove the NAND node from the nodes array
+                    nodes = nodes.filter(n => n !== dragTarget);
+                    dragTarget.remove();
+                    dragTarget = null;
+                    isDragging = false;
+                    
+                    // Draw new connections from input nodes to output
+                    if (input1) {
+                        drawConnection(input1, outputNode);
+                        outputNode.dataset.input1 = input1.id;
+                    }
+                    if (input2) {
+                        drawConnection(input2, outputNode);
+                        outputNode.dataset.input2 = input2.id;
+                    }
+                    
+                    // Update the output value based on NAND of inputs
+                    if (input1 && input2) {
+                        const val1 = parseInt(input1.dataset.value);
+                        const val2 = parseInt(input2.dataset.value);
+                        const nandResult = ~(val1 & val2) & 1;
+                        outputNode.dataset.value = nandResult;
+                        outputNode.textContent = nandResult;
+                    }
+                    
+                    checkCircuit();
+                    return;
+                }
+            }
+            
+            dragTarget.style.left = currentX + 'px';
+            dragTarget.style.top = currentY + 'px';
+            dragTarget.dataset.x = currentX;
+            dragTarget.dataset.y = currentY;
+            
+            requestAnimationFrame(() => {
+                updateConnections();
+                updateTruthTable();
+            });
+        }
+
+        function stopDragging() {
+            isDragging = false;
+            if (dragTarget) {
+                dragTarget.classList.remove('dragging');
+                dragTarget = null;
+            }
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDragging);
+        }
+
+        function updateConnections() {
+            // Remove all existing connection lines
+            connections.forEach(conn => conn.remove());
+            connections = [];
+            
+            // Redraw all connections
+            const drawnConnections = new Set();
+            
+            // Draw connections for NAND gates
+            nodes.forEach(node => {
+                if (node.dataset.type === 'nand') {
+                    const input1 = nodes.find(n => n.id === node.dataset.input1);
+                    const input2 = nodes.find(n => n.id === node.dataset.input2);
+                    
+                    if (input1) {
+                        const connKey = `${input1.id}-${node.id}`;
+                        if (!drawnConnections.has(connKey)) {
+                            drawConnection(input1, node);
+                            drawnConnections.add(connKey);
+                        }
+                    }
+                    if (input2) {
+                        const connKey = `${input2.id}-${node.id}`;
+                        if (!drawnConnections.has(connKey)) {
+                            drawConnection(input2, node);
+                            drawnConnections.add(connKey);
+                        }
+                    }
+                }
+            });
+            
+            // Draw connections to output nodes
+            outputNodes.forEach(output => {
+                const input1 = nodes.find(n => n.id === output.dataset.input1);
+                const input2 = nodes.find(n => n.id === output.dataset.input2);
+                
+                if (input1) {
+                    drawConnection(input1, output);
+                }
+                if (input2) {
+                    drawConnection(input2, output);
+                }
+            });
+        }
+
+        function updateTruthTable() {
+            const table = document.getElementById('truth-table-content');
+            const goal = GOALS[currentGoal];
+            
+            let html = '<table><tr><th>Input A</th><th>Input B</th><th>Target</th><th>Current</th></tr>';
+            
+            const inputNodes = nodes.filter(n => n.dataset.type === 'input')
+                                   .sort((a, b) => parseFloat(a.dataset.x) - parseFloat(b.dataset.x));
+            const outputNode = outputNodes[0];
+            
+            goal.truthTable.forEach(entry => {
+                const isCurrentRow = inputNodes.length === 2 && 
+                                   parseInt(inputNodes[0].dataset.value) === entry.inputs[0] && 
+                                   parseInt(inputNodes[1].dataset.value) === entry.inputs[1];
+                
+                const currentOutput = isCurrentRow ? (outputNode ? outputNode.dataset.value : '?') : '-';
+                
+                html += `<tr class="${isCurrentRow ? 'current' : ''}">
+                    <td>${entry.inputs[0]}</td>
+                    <td>${entry.inputs[1]}</td>
+                    <td>${entry.output}</td>
+                    <td>${currentOutput}</td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            table.innerHTML = html;
+        }
+
+        // Update the checkCircuit function to also update the truth table
+        const originalCheckCircuit = checkCircuit;
+        function checkCircuit() {
+            originalCheckCircuit();
+            updateTruthTable();
+        }
+
+        // Initialize
+        createTooltip();
+        setGoal('xor');
+
+        function findPaths(startNode) {
+            const paths = [];
+            
+            function traverse(currentNode, currentPath = []) {
+                currentPath = [...currentPath, currentNode];
+                
+                // Find all connected nodes
+                let nextNodes = [];
+                if (currentNode.dataset.type === 'input' || currentNode.dataset.type === 'nand') {
+                    // Find connected NAND gates
+                    nextNodes = nodes.filter(n => 
+                        n.dataset.type === 'nand' && 
+                        (n.dataset.input1 === currentNode.id || n.dataset.input2 === currentNode.id)
+                    );
+                    
+                    // Find connected output nodes
+                    const connectedOutputs = outputNodes.filter(n => n.dataset.connectedTo === currentNode.id);
+                    nextNodes = [...nextNodes, ...connectedOutputs];
+                }
+                
+                if (nextNodes.length === 0) {
+                    // End of path
+                    if (currentPath.length > 1) {
+                        paths.push(currentPath);
+                    }
+                } else {
+                    // Continue traversing each branch
+                    nextNodes.forEach(nextNode => {
+                        // Prevent cycles
+                        if (!currentPath.includes(nextNode)) {
+                            traverse(nextNode, currentPath);
+                        }
+                    });
+                }
+            }
+            
+            traverse(startNode);
+            return paths;
+        }
+
+        // Track which balls have arrived at each node
+        let ballArrivals = new Map();
+
+        async function playAnimation() {
+            const playBtn = document.getElementById('play-btn');
+            playBtn.disabled = true;
+            
+            try {
+                // Reset ball arrival tracking
+                ballArrivals.clear();
+                
+                // Initialize all NAND nodes to track their inputs
+                nodes.filter(n => n.dataset.type === 'nand').forEach(nand => {
+                    ballArrivals.set(nand.id, new Set());
+                });
+                
+                // Start balls from all input nodes simultaneously
+                const inputNodes = nodes.filter(n => n.dataset.type === 'input');
+                await Promise.all(inputNodes.map(node => sendBallFromNode(node)));
+            } catch (error) {
+                console.error('Animation error:', error);
+            } finally {
+                playBtn.disabled = false;
+            }
+        }
+
+        async function sendBallFromNode(node) {
+            console.log(`Sending ball from node: ${node.id}, type: ${node.dataset.type}`);
+            // Flash the source node
+            node.style.transform = node.dataset.type === 'output' ? 'translateX(-50%) scale(1.2)' : 'scale(1.2)';
+            await new Promise(resolve => setTimeout(resolve, 100));
+            node.style.transform = node.dataset.type === 'output' ? 'translateX(-50%)' : '';
+            
+            // Find all children of this node
+            const children = findChildNodes(node);
+            console.log(`Children of node ${node.id}:`, children.map(child => child.id));
+            
+            // Send balls to all children simultaneously
+            await Promise.all(children.map(async (child) => {
+                const ball = createBall(node);
+                await animateBallToNode(ball, node, child);
+                
+                if (child.dataset.type === 'nand') {
+                    // Record this ball's arrival at the NAND gate
+                    const arrivals = ballArrivals.get(child.id);
+                    arrivals.add(node.id);
+                    console.log(`Ball arrived at NAND node ${child.id}, arrivals:`, Array.from(arrivals));
+                    
+                    // If both inputs have arrived
+                    if (arrivals.has(child.dataset.input1) && arrivals.has(child.dataset.input2)) {
+                        console.log(`Both inputs arrived at NAND node ${child.id}`);
+                        // Update NAND value
+                        const input1 = nodes.find(n => n.id === child.dataset.input1);
+                        const input2 = nodes.find(n => n.id === child.dataset.input2);
+                        updateNandValue(child, input1, input2);
+                        
+                        // Send ball from this NAND node to its children
+                        await sendBallFromNode(child);
+                    }
+                } else if (child.dataset.type === 'output') {
+                    // Update output node value
+                    child.dataset.value = node.dataset.value;
+                    child.textContent = node.dataset.value;
+                    checkCircuit();
+                }
+                
+                ball.remove();
+            }));
+        }
+
+        function findChildNodes(node) {
+            if (node.dataset.type === 'input' || node.dataset.type === 'nand') {
+                // Find NAND gates where this is input1 or input2
+                return nodes.filter(n => 
+                    n.dataset.type === 'nand' && 
+                    (n.dataset.input1 === node.id || n.dataset.input2 === node.id)
+                ).concat(
+                    // Find output nodes connected to this NAND
+                    outputNodes.filter(n => 
+                        n.dataset.input1 === node.id || 
+                        n.dataset.input2 === node.id
+                    )
+                );
+            }
+            return [];
+        }
+
+        async function animateBallToNode(ball, fromNode, toNode) {
+            const startX = parseFloat(fromNode.dataset.x) + fromNode.offsetWidth/2 - 6;
+            const startY = parseFloat(fromNode.dataset.y) + fromNode.offsetHeight/2 - 6;
+            ball.style.left = startX + 'px';
+            ball.style.top = startY + 'px';
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const endX = parseFloat(toNode.dataset.x) + toNode.offsetWidth/2 - 6;
+            const endY = parseFloat(toNode.dataset.y) + toNode.offsetHeight/2 - 6;
+            ball.style.transition = 'all 0.5s ease-in-out';
+            ball.style.left = endX + 'px';
+            ball.style.top = endY + 'px';
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Flash the destination node
+            toNode.style.transform = toNode.dataset.type === 'output' ? 'translateX(-50%) scale(1.2)' : 'scale(1.2)';
+            await new Promise(resolve => setTimeout(resolve, 100));
+            toNode.style.transform = toNode.dataset.type === 'output' ? 'translateX(-50%)' : '';
+        }
+
+        function createBall(startNode) {
+            const ball = document.createElement('div');
+            ball.className = 'ball';
+            const x = parseFloat(startNode.dataset.x) + startNode.offsetWidth/2 - 6;
+            const y = parseFloat(startNode.dataset.y) + startNode.offsetHeight/2 - 6;
+            
+            ball.style.left = x + 'px';
+            ball.style.top = y + 'px';
+            
+            document.getElementById('game-container').appendChild(ball);
+            return ball;
+        }
+    </script>
+</body>
+</html>  

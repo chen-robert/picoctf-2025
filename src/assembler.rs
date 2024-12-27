@@ -12,6 +12,8 @@ pub enum Instruction {
     Sub { dest: u8, src: u8 },
     Mul { dest: u8, src: u8 },
     AddI { dest: u8, imm: u8 },
+    And { dest: u8, src: u8 },
+    Nand { dest: u8, src: u8 },
     LoadI { dest: u8, imm: u8 },
     Store { addr: u8, src: u8 },
     Load { dest: u8, src: u8 },
@@ -61,7 +63,7 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
             assert!(parts.len() == 1, "NOP takes no arguments");
             Ok(Instruction::Nop)
         }
-        "ADD" | "SUB" | "MUL" | "LOAD" => {
+        "ADD" | "SUB" | "MUL" | "LOAD" | "AND" | "NAND" => {
             assert!(parts.len() == 3, "{} requires 2 register arguments", parts[0].to_uppercase());
             let dest = parse_register(parts[1])?;
             let src = parse_register(parts[2])?;
@@ -70,6 +72,8 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
                 "SUB" => Ok(Instruction::Sub { dest, src }),
                 "MUL" => Ok(Instruction::Mul { dest, src }),
                 "LOAD" => Ok(Instruction::Load { dest, src }),
+                "AND" => Ok(Instruction::And { dest, src }),
+                "NAND" => Ok(Instruction::Nand { dest, src }),
                 _ => unreachable!()
             }
         }
@@ -145,6 +149,18 @@ fn encode_instruction(inst: Instruction) -> u16 {
             ((src as u64) << 8) |       // reg_src (4 bits)
             ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b0011u64)                 // MUL opcode (0x3)
+        }
+        Instruction::And { dest, src } => {
+            ((0u64) << 8) |             // immediate (unused)
+            ((src as u64) << 8) |       // reg_src (4 bits)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
+            (0b0101u64)                 // AND opcode (0x5)
+        }
+        Instruction::Nand { dest, src } => {
+            ((0u64) << 8) |             // immediate (unused)
+            ((src as u64) << 8) |       // reg_src (4 bits)
+            ((dest as u64) << 4) |      // reg_dest (4 bits)
+            (0b0110u64)                 // NAND opcode (0x6)
         }
         Instruction::LoadI { dest, imm } => {
             ((imm as u64) << 8) |       // immediate
