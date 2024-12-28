@@ -1,9 +1,0 @@
-read -sv ./test.v
-hierarchy -check
-proc; opt; fsm; opt; memory; opt
-techmap; opt
-show
-
-write_verilog ./test2.v
-json -o ./tmp.json
-write_blif test.blif
