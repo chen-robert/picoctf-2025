@@ -42,47 +42,6 @@ fn test_add() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_sub() -> Result<(), Box<dyn Error>> {
-    let test_program = "\
-        LOADI r0 20     ; R0 = 20
-        LOADI r1 8      ; R1 = 8
-        SUB r0 r1        ; R0 = R0 - R1 (12)
-        LOADI r2 0      ; R2 = 0 (memory address)
-        STORE r2 r0      ; Store R0 to memory at address in R2
-    ";
-
-    let expected_states = [
-        (2, &[20, 0, 0, 0]),   // After first LOADI
-        (4, &[20, 8, 0, 0]),   // After second LOADI
-        (6, &[12, 8, 0, 0]),   // After SUB
-        (8, &[12, 8, 0, 0]),   // After STORE
-    ];
-
-    run_test_program(test_program, 500, &expected_states)
-}
-
-#[test]
-fn test_mul() -> Result<(), Box<dyn Error>> {
-    let test_program = "\
-        LOADI r0 6      ; R0 = 6
-        LOADI r1 7      ; R1 = 7
-        MUL r0 r1        ; R0 = R0 * R1 (42)
-        LOADI r2 0      ; R2 = 0 (memory address)
-        STORE r2 r0      ; Store R0 to memory at address in R2
-    ";
-
-    let expected_states = [
-        (2, &[6, 0, 0, 0]),    // After first LOADI
-        (4, &[6, 7, 0, 0]),    // After second LOADI
-        (6, &[42, 7, 0, 0]),   // After MUL
-        (8, &[42, 7, 0, 0]),   // After third LOADI
-        (10, &[42, 7, 0, 0]),  // After STORE
-    ];
-
-    run_test_program(test_program, 500, &expected_states)
-}
-
-#[test]
 fn test_loadi() -> Result<(), Box<dyn Error>> {
     let test_program = "\
         LOADI r0 123    ; R0 = 123
@@ -191,18 +150,6 @@ fn test_arithmetic_edge_cases() -> Result<(), Box<dyn Error>> {
         ADD r0 r1        ; R0 = 255 + 255 (510)
         LOADI r2 0      ; R2 = 0 (memory address)
         STORE r2 r0      ; Store R0 to memory at address in R2
-        ; Test multiplication overflow (16 * 16 = 256)
-        LOADI r0 16     ; R0 = 16
-        LOADI r1 16     ; R1 = 16
-        MUL r0 r1        ; R0 = 16 * 16 (256)
-        LOADI r2 1      ; R2 = 1 (memory address)
-        STORE r2 r0      ; Store R0 to memory at address in R2
-        ; Test subtraction (0 - 1 = 65535 in 16-bit)
-        LOADI r0 0      ; R0 = 0
-        LOADI r1 1      ; R1 = 1
-        SUB r0 r1        ; R0 = 0 - 1 (65535)
-        LOADI r2 2      ; R2 = 2 (memory address)
-        STORE r2 r0      ; Store R0 to memory at address in R2
     ";
 
     let expected_states = [
@@ -211,16 +158,6 @@ fn test_arithmetic_edge_cases() -> Result<(), Box<dyn Error>> {
         (6, &[510, 255, 0, 0]),  // After ADD
         (8, &[510, 255, 0, 0]),  // After third LOADI
         (10, &[510, 255, 0, 0]), // After first STORE
-        (12, &[16, 255, 0, 0]),  // After fourth LOADI
-        (14, &[16, 16, 0, 0]),   // After fifth LOADI
-        (16, &[256, 16, 0, 0]),  // After MUL
-        (18, &[256, 16, 1, 0]),  // After sixth LOADI
-        (20, &[256, 16, 1, 0]),  // After second STORE
-        (22, &[0, 16, 1, 0]),    // After seventh LOADI
-        (24, &[0, 1, 1, 0]),     // After eighth LOADI
-        (26, &[65535, 1, 1, 0]), // After SUB (wrap around)
-        (28, &[65535, 1, 2, 0]), // After ninth LOADI
-        (30, &[65535, 1, 2, 0]), // After third STORE
     ];
 
     run_test_program(test_program, 500, &expected_states)
@@ -358,7 +295,7 @@ start:
         STORE r2 r1
 
         LOADI r3 0xc0
-        SUB r3 r2
+        GT r3 r3 r2
 
         JZ r3 end
 
@@ -439,23 +376,6 @@ fn test_addi() -> Result<(), Box<dyn Error>> {
         (4, &[8, 0, 0, 0]),    // After ADDI
         (6, &[8, 10, 0, 0]),   // After second LOADI
         (8, &[8, 265, 0, 0]),  // After second ADDI (no overflow since 16-bit)
-    ];
-
-    run_test_program(test_program, 100, &expected_states)
-}
-
-#[test]
-fn test_and() -> Result<(), Box<dyn Error>> {
-    let test_program = "\
-        LOADW r0 0xFF00  ; r0 = 0xFF00
-        LOADW r1 0xF0F0  ; r1 = 0xF0F0
-        AND r0 r1        ; r0 = 0xF000
-    ";
-
-    let expected_states = [
-        (4, &[0xFF00, 0, 0, 0]),      // After first LOADW
-        (8, &[0xFF00, 0xF0F0, 0, 0]), // After second LOADW
-        (10, &[0xF000, 0xF0F0, 0, 0]), // After AND
     ];
 
     run_test_program(test_program, 100, &expected_states)

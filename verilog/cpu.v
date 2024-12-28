@@ -36,7 +36,6 @@ wire [2:0] reg_src2   = instruction[14:12]; // Source register 2 for GT
 reg [15:0] registers [0:7]; // Changed to 16 16-bit registers
 reg [2:0] load_dest;        // Changed to 4 bits for LOAD instruction destination register
 reg should_load;            // Flag to track if we should load in state 2
-reg [15:0] pc_increment;   // Amount to increment PC by
 
 // Initialize registers to 0
 initial begin
@@ -51,17 +50,13 @@ initial begin
 
     load_dest <= 0;
     should_load <= 0;
-    pc_increment <= 2;  // Default increment
     halted <= 0;
     flag <= 0;
-end
-
-initial begin
-  out_val <= 0;
-  state <= 0;
-  program_counter <= 0;
-  addr <= 0;
-  write_enable <= 0;
+    out_val <= 0;
+    state <= 0;
+    program_counter <= 0;
+    addr <= 0;
+    write_enable <= 0;
 end
 
 always @(posedge clock or posedge reset) begin
@@ -110,17 +105,8 @@ always @(posedge clock or posedge reset) begin
             4'b0001: begin // ADD
               registers[reg_dest] <= registers[reg_dest] + registers[reg_src];
             end
-            4'b0010: begin // SUB
-              registers[reg_dest] <= registers[reg_dest] - registers[reg_src];
-            end
-            4'b0011: begin // MUL
-              registers[reg_dest] <= registers[reg_dest] * registers[reg_src];
-            end
             4'b0100: begin // ADDI
               registers[reg_dest] <= registers[reg_dest] + immediate;
-            end
-            4'b0101: begin // AND
-              registers[reg_dest] <= registers[reg_dest] & registers[reg_src];
             end
             4'b0110: begin // NAND
               registers[reg_dest] <= ~(registers[reg_dest] & registers[reg_src]);

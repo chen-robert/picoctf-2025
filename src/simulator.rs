@@ -161,7 +161,7 @@ pub fn run_test_program_with_expectations(
 
     if let Some(memory) = expected_memory {
         for &(addr, expected_val) in memory {
-            assert_eq!(mem[addr], expected_val);
+            assert_eq!(mem[addr], expected_val, "Memory mismatch at address {:#x}", addr);
         }
     }
 
