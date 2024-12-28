@@ -5,117 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NAND Pachinko</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        #game-container {
-            width: 900px;
-            height: 600px;
-            margin: 0 auto;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .node {
-            position: absolute;
-            cursor: move;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            user-select: none;
-            touch-action: none;
-            will-change: transform, left, top;
-        }
-
-        .connection {
-            position: absolute;
-            height: 3px;
-            transform-origin: left center;
-            pointer-events: none;
-        }
-
-        .tooltip {
-            position: absolute;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .output-node {
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-        }
-
-        .goal-display {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .game-wrapper {
-            display: flex;
-            gap: 2rem;
-            align-items: flex-start;
-        }
-
-        .truth-table {
-            padding: 1.5rem;
-            min-width: 300px;
-        }
-
-        .truth-table table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-            font-family: monospace;
-        }
-
-        .truth-table th, .truth-table td {
-            padding: 0.75rem;
-            text-align: center;
-        }
-
-        .node {
-            cursor: move;
-            touch-action: none;
-        }
-
-        .ball {
-            width: 12px;
-            height: 12px;
-            position: absolute;
-            pointer-events: none;
-            z-index: 100;
-            will-change: transform, left, top;
-        }
-    </style>
 </head>
 <body>
     <h1>NAND Pachinko</h1>
     <p class="description">
-        Build complex logic circuits using NAND gates! Connect nodes to create NAND gates and try to match the target outputs.
+        Build an XOR gate using NAND gates! Connect nodes to create NAND gates and try to match the target outputs.
         Drag nodes to rearrange them, and connect them to create your circuit.
     </p>
     <div id="controls">
         <button id="reset-btn" onclick="resetGame()">Reset Circuit</button>
-        <button onclick="addInputNode()">Add Input Node</button>
-        <select id="goal-select" onchange="setGoal(this.value)">
-            <option value="xor">Build XOR Gate</option>
-            <option value="and">Build AND Gate</option>
-            <option value="or">Build OR Gate</option>
-        </select>
+        <button onclick="addIntermediateNode()">Add Intermediate Node</button>
         <button id="play-btn" onclick="playAnimation()">Play Animation</button>
     </div>
     <div class="game-wrapper">
+        <div class="circuit-info">
+            <h2>Circuit Layout</h2>
+            <div id="circuit-serialization"></div>
+        </div>
         <div id="game-container">
             <div class="goal-display"></div>
         </div>
@@ -130,7 +36,7 @@
         let nodes = [];
         let connections = [];
         let tooltip = null;
-        let currentGoal = 'xor';
+        let nextNodeId = 2; // Start from 2 since output is 1
         let outputNodes = [];
 
         const GOALS = {
@@ -142,26 +48,87 @@
                     { inputs: [1, 0], output: 1 },
                     { inputs: [1, 1], output: 0 }
                 ]
-            },
-            and: {
-                description: 'AND Gate: Output should be 1 only when both inputs are 1',
-                truthTable: [
-                    { inputs: [0, 0], output: 0 },
-                    { inputs: [0, 1], output: 0 },
-                    { inputs: [1, 0], output: 0 },
-                    { inputs: [1, 1], output: 1 }
-                ]
-            },
-            or: {
-                description: 'OR Gate: Output should be 1 when either input is 1',
-                truthTable: [
-                    { inputs: [0, 0], output: 0 },
-                    { inputs: [0, 1], output: 1 },
-                    { inputs: [1, 0], output: 1 },
-                    { inputs: [1, 1], output: 1 }
-                ]
             }
         };
+
+        function updateCircuitSerialization() {
+            const serializationDiv = document.getElementById('circuit-serialization');
+            let serialization = '';
+            
+            // Helper function to find a node in either array
+            const findNodeById = (id) => {
+                return nodes.find(n => n.id === id) || 
+                       outputNodes.find(n => n.id === id);
+            };
+            
+            // Only show NAND gates with both inputs connected
+            nodes.filter(n => n.dataset.type === 'nand' && n.dataset.input1 && n.dataset.input2).forEach(nand => {
+                const input1 = findNodeById(nand.dataset.input1);
+                const input2 = findNodeById(nand.dataset.input2);
+                if (input1 && input2) {
+                    serialization += `${input1.dataset.nodeId} ${input2.dataset.nodeId} ${nand.dataset.nodeId}<br>`;
+                }
+            });
+            
+            // Add output node connections if they exist
+            outputNodes.forEach(output => {
+                if (output.dataset.input1 && output.dataset.input2) {
+                    const input1 = findNodeById(output.dataset.input1);
+                    const input2 = findNodeById(output.dataset.input2);
+                    if (input1 && input2) {
+                        serialization += `${input1.dataset.nodeId} ${input2.dataset.nodeId} 1<br>`;
+                    }
+                }
+            });
+            
+            serializationDiv.innerHTML = serialization;
+        }
+
+        function createNode(x, y, value, type) {
+            const node = document.createElement('div');
+            node.className = `node ${type}-node`;
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.dataset.x = x;
+            node.dataset.y = y;
+            node.dataset.value = value;
+            node.dataset.type = type;
+            node.id = 'node-' + Math.random().toString(36).substr(2, 9);
+            
+            // Assign node ID
+            if (type === 'output') {
+                node.dataset.nodeId = '1';
+                node.textContent = '1';
+            } else {
+                node.dataset.nodeId = nextNodeId.toString();
+                node.textContent = nextNodeId.toString();
+                nextNodeId++;
+            }
+            
+            node.addEventListener('mousedown', startDragging);
+            node.addEventListener('click', () => handleNodeClick(node));
+            node.addEventListener('mousemove', (e) => showTooltip(node, e));
+            node.addEventListener('mouseout', hideTooltip);
+            
+            document.getElementById('game-container').appendChild(node);
+            if (type === 'output') {
+                outputNodes.push(node);
+            } else {
+                nodes.push(node);
+            }
+            return node;
+        }
+
+        function createNandNode(input1, input2) {
+            const x = (parseInt(input1.dataset.x) + parseInt(input2.dataset.x)) / 2;
+            const y = Math.max(parseInt(input1.dataset.y), parseInt(input2.dataset.y)) + 80;
+            const nand = createNode(x, y, '1', 'nand');
+            nand.dataset.input1 = input1.id;
+            nand.dataset.input2 = input2.id;
+            updateNandValue(nand, input1, input2);
+            updateCircuitSerialization();
+            return nand;
+        }
 
         function createTooltip() {
             tooltip = document.createElement('div');
@@ -183,77 +150,159 @@
             if (tooltip) tooltip.style.opacity = '0';
         }
 
-        function createNode(x, y, value, type) {
-            const node = document.createElement('div');
-            node.className = `node ${type}-node`;
-            node.style.left = x + 'px';
-            node.style.top = y + 'px';
-            node.dataset.x = x;
-            node.dataset.y = y;
-            node.textContent = value;
-            node.dataset.value = value;
-            node.dataset.type = type;
-            node.id = 'node-' + Math.random().toString(36).substr(2, 9);
-            
-            node.addEventListener('mousedown', startDragging);
-            node.addEventListener('click', () => handleNodeClick(node));
-            node.addEventListener('mousemove', (e) => showTooltip(node, e));
-            node.addEventListener('mouseout', hideTooltip);
-            
-            document.getElementById('game-container').appendChild(node);
-            if (type === 'output') {
-                outputNodes.push(node);
-            } else {
-            nodes.push(node);
-            }
-            return node;
-        }
-
         function handleNodeClick(node) {
             if (!selectedNode) {
-                if (node.dataset.type !== 'output') {
+                // Don't allow selecting output node as source
+                if (node.dataset.type === 'output') return;
+                
                 selectedNode = node;
                 node.classList.add('selected');
-                }
             } else if (selectedNode !== node) {
-                createConnection(selectedNode, node);
+                // Don't allow connecting to input nodes (the first two nodes) or from output nodes
+                if (node.dataset.nodeId === '2' || node.dataset.nodeId === '3') {
+                    selectedNode.classList.remove('selected');
+                    selectedNode = null;
+                    return;
+                }
+                
+                if (node.dataset.type === 'output') {
+                    // Handle connection to output node
+                    if (!node.dataset.input1) {
+                        node.dataset.input1 = selectedNode.id;
+                    } else if (!node.dataset.input2) {
+                        node.dataset.input2 = selectedNode.id;
+                    }
+                    drawConnection(selectedNode, node);
+                    node.dataset.value = selectedNode.dataset.value; // Directly set value without propagation
+                    checkCircuit();
+                    updateTruthTable();
+                    updateCircuitSerialization();
+                    selectedNode.classList.remove('selected');
+                    selectedNode = null;
+                    return;
+                }
+                
+                // Check if destination node already has 2 inputs
+                const existingInputs = [];
+                if (node.dataset.input1) existingInputs.push(node.dataset.input1);
+                if (node.dataset.input2) existingInputs.push(node.dataset.input2);
+                
+                // Check for duplicate connections
+                if (existingInputs.includes(selectedNode.id)) {
+                    selectedNode.classList.remove('selected');
+                    selectedNode = null;
+                    return;
+                }
+                
+                if (existingInputs.length < 2) {
+                    // Add connection
+                    if (!node.dataset.input1) {
+                        node.dataset.input1 = selectedNode.id;
+                    } else {
+                        node.dataset.input2 = selectedNode.id;
+                    }
+                    drawConnection(selectedNode, node);
+                    updateNandValue(node);
+                    checkCircuit(); // Add check here after all updates are done
+                    updateCircuitSerialization();
+                    updateTruthTable();
+                }
                 selectedNode.classList.remove('selected');
                 selectedNode = null;
             }
         }
 
-        function createConnection(node1, node2) {
-            if ((node1.dataset.type === 'input' || node1.dataset.type === 'nand') && 
-                (node2.dataset.type === 'input' || node2.dataset.type === 'nand' || node2.dataset.type === 'output')) {
-                if (node2.dataset.type === 'output') {
-                    // Direct connection to output
-                    node2.dataset.connectedTo = node1.id;
-                    drawConnection(node1, node2);
-                    node2.dataset.value = node1.dataset.value;
-                    node2.textContent = node1.dataset.value;
-                    checkCircuit();
-                } else {
-                    // Create NAND gate
-                const nandNode = createNandNode(node1, node2);
-                    nandNode.dataset.input1 = node1.id;
-                    nandNode.dataset.input2 = node2.id;
-                drawConnection(node1, nandNode);
-                drawConnection(node2, nandNode);
-                updateNandValue(nandNode, node1, node2);
-                }
-                updateTruthTable(); // Update truth table after connections change
+        // Add click handler to game container to deselect when clicking empty space
+        document.getElementById('game-container').addEventListener('click', function(e) {
+            if (e.target === this && selectedNode) {
+                selectedNode.classList.remove('selected');
+                selectedNode = null;
+            }
+        });
+
+        function updateOutputValue(outputNode) {
+            const input1 = nodes.find(n => n.id === outputNode.dataset.input1);
+            const input2 = nodes.find(n => n.id === outputNode.dataset.input2);
+            
+            if (input1) {
+                outputNode.dataset.value = input1.dataset.value;
+            }
+            if (input2) {
+                // If we have two inputs, use the most recent one
+                outputNode.dataset.value = input2.dataset.value;
             }
         }
 
-        function createNandNode(input1, input2) {
-            const x = (parseInt(input1.dataset.x) + parseInt(input2.dataset.x)) / 2;
-            const y = Math.max(parseInt(input1.dataset.y), parseInt(input2.dataset.y)) + 80;
-            return createNode(x, y, '1', 'nand');
+        function updateNandValue(nandNode) {
+            const input1 = nodes.find(n => n.id === nandNode.dataset.input1);
+            const input2 = nodes.find(n => n.id === nandNode.dataset.input2);
+            
+            if (input1 && input2) {
+                const val1 = parseInt(input1.dataset.value);
+                const val2 = parseInt(input2.dataset.value);
+                const nandResult = ~(val1 & val2) & 1;
+                nandNode.dataset.value = nandResult;
+                
+                // Find nodes that use this NAND as input and update them
+                nodes.forEach(node => {
+                    if ((node.dataset.input1 === nandNode.id || node.dataset.input2 === nandNode.id) && 
+                        node.dataset.type === 'nand') {
+                        updateNandValue(node);
+                    }
+                });
+                
+                // Update output nodes that use this NAND as input
+                outputNodes.forEach(node => {
+                    if (node.dataset.input1 === nandNode.id || node.dataset.input2 === nandNode.id) {
+                        node.dataset.value = nandNode.dataset.value;
+                    }
+                });
+            }
+        }
+
+        function updateConnections() {
+            // Remove all existing connection lines
+            connections.forEach(conn => conn.remove());
+            connections = [];
+            
+            // Helper function to find a node in either array
+            const findNodeById = (id) => {
+                return nodes.find(n => n.id === id) || 
+                       outputNodes.find(n => n.id === id);
+            };
+            
+            // Redraw all connections for NAND nodes
+            nodes.forEach(node => {
+                if (node.dataset.input1) {
+                    const input1 = findNodeById(node.dataset.input1);
+                    if (input1) drawConnection(input1, node);
+                }
+                if (node.dataset.input2) {
+                    const input2 = findNodeById(node.dataset.input2);
+                    if (input2) drawConnection(input2, node);
+                }
+            });
+            
+            // Draw connections to output nodes
+            outputNodes.forEach(output => {
+                if (output.dataset.input1) {
+                    const input1 = findNodeById(output.dataset.input1);
+                    if (input1) drawConnection(input1, output);
+                }
+                if (output.dataset.input2) {
+                    const input2 = findNodeById(output.dataset.input2);
+                    if (input2) drawConnection(input2, output);
+                }
+            });
         }
 
         function drawConnection(from, to) {
             const connection = document.createElement('div');
             connection.className = 'connection';
+            
+            // Store the connected nodes' IDs
+            connection.dataset.fromId = from.id;
+            connection.dataset.toId = to.id;
             
             const fromX = parseFloat(from.dataset.x) + from.offsetWidth/2;
             const fromY = parseFloat(from.dataset.y) + from.offsetHeight/2;
@@ -274,25 +323,19 @@
             connections.push(connection);
         }
 
-        function updateNandValue(nandNode, input1, input2) {
-            const val1 = parseInt(input1.dataset.value);
-            const val2 = parseInt(input2.dataset.value);
-            const nandResult = ~(val1 & val2) & 1;
-            nandNode.textContent = nandResult;
-            nandNode.dataset.value = nandResult;
-        }
-
-        function addInputNode() {
+        function addIntermediateNode() {
             const x = Math.random() * 800 + 50;
             const y = Math.random() * 100 + 50;
             const value = Math.round(Math.random());
-            createNode(x, y, value, 'input');
+            const node = createNode(x, y, value, 'nand');
+            updateCircuitSerialization();
+            return node;
         }
 
         function createOutputNodes() {
             const containerWidth = 900;
             const containerHeight = 600;
-            createNode(containerWidth/2 - 25, containerHeight - 80, '?', 'output');
+            createNode(containerWidth/2, containerHeight - 150, '?', 'output');
         }
 
         function setGoal(goal) {
@@ -303,14 +346,14 @@
 
         function updateGoalDisplay() {
             const goalDisplay = document.querySelector('.goal-display');
-            goalDisplay.textContent = GOALS[currentGoal].description;
+            goalDisplay.textContent = GOALS.xor.description;
         }
 
         function checkCircuit() {
             const outputNode = outputNodes[0];
             if (!outputNode || outputNode.dataset.value === '?') return;
 
-            const goal = GOALS[currentGoal];
+            const goal = GOALS.xor;  // We only have XOR now
             const inputs = nodes.filter(n => n.dataset.type === 'input')
                               .map(n => parseInt(n.dataset.value));
             
@@ -324,6 +367,9 @@
             } else {
                 outputNode.classList.remove('correct');
             }
+            
+            // Update truth table after checking circuit
+            updateTruthTable();
         }
 
         function resetGame() {
@@ -334,13 +380,18 @@
             outputNodes = [];
             connections = [];
             selectedNode = null;
+            nextNodeId = 2; // Reset node ID counter
 
             // Initialize with input nodes and output node
             for (let i = 0; i < 2; i++) {
-                addInputNode();
+                const x = Math.random() * 800 + 50;
+                const y = Math.random() * 100 + 50;
+                const value = Math.round(Math.random());
+                createNode(x, y, value, 'input');
             }
             createOutputNodes();
             updateGoalDisplay();
+            updateCircuitSerialization();
         }
 
         // Add dragging state variables
@@ -352,8 +403,6 @@
         let dragTarget = null;
 
         function startDragging(e) {
-            if (e.target.dataset.type === 'output') return; // Don't allow dragging output nodes
-            
             dragTarget = e.target;
             isDragging = true;
             
@@ -377,85 +426,19 @@
             
             const containerRect = document.getElementById('game-container').getBoundingClientRect();
             
-            // Calculate new position relative to container, accounting for mouse offset within node
             currentX = e.clientX - containerRect.left - initialX;
             currentY = e.clientY - containerRect.top - initialY;
             
-            // Constrain to container bounds
             currentX = Math.max(0, Math.min(currentX, containerRect.width - dragTarget.offsetWidth));
             currentY = Math.max(0, Math.min(currentY, containerRect.height - dragTarget.offsetHeight));
-            
-            // Check for snapping to output node
-            const outputNode = outputNodes[0];
-            const snapDistance = 50; // Distance in pixels for snapping
-            
-            if (dragTarget.dataset.type === 'nand') {
-                const outputRect = {
-                    x: parseFloat(outputNode.dataset.x),
-                    y: parseFloat(outputNode.dataset.y),
-                    width: outputNode.offsetWidth,
-                    height: outputNode.offsetHeight
-                };
-                
-                const distance = Math.sqrt(
-                    Math.pow(currentX - outputRect.x, 2) + 
-                    Math.pow(currentY - outputRect.y, 2)
-                );
-                
-                if (distance < snapDistance) {
-                    // Merge with output node
-                    outputNode.dataset.connectedTo = dragTarget.id;
-                    outputNode.dataset.value = dragTarget.dataset.value;
-                    outputNode.textContent = dragTarget.dataset.value;
-                    
-                    // Store the input nodes before removing the NAND node
-                    const input1 = nodes.find(n => n.id === dragTarget.dataset.input1);
-                    const input2 = nodes.find(n => n.id === dragTarget.dataset.input2);
-                    
-                    // Remove old connections
-                    connections.forEach(conn => conn.remove());
-                    connections = [];
-                    
-                    // Remove the NAND node from the nodes array
-                    nodes = nodes.filter(n => n !== dragTarget);
-                    dragTarget.remove();
-                    dragTarget = null;
-                    isDragging = false;
-                    
-                    // Draw new connections from input nodes to output
-                    if (input1) {
-                        drawConnection(input1, outputNode);
-                        outputNode.dataset.input1 = input1.id;
-                    }
-                    if (input2) {
-                        drawConnection(input2, outputNode);
-                        outputNode.dataset.input2 = input2.id;
-                    }
-                    
-                    // Update the output value based on NAND of inputs
-                    if (input1 && input2) {
-                        const val1 = parseInt(input1.dataset.value);
-                        const val2 = parseInt(input2.dataset.value);
-                        const nandResult = ~(val1 & val2) & 1;
-                        outputNode.dataset.value = nandResult;
-                        outputNode.textContent = nandResult;
-                    }
-                    
-                    checkCircuit();
-                    updateTruthTable(); // Automatically update the truth table after merging
-                    return;
-                }
-            }
             
             dragTarget.style.left = currentX + 'px';
             dragTarget.style.top = currentY + 'px';
             dragTarget.dataset.x = currentX;
             dragTarget.dataset.y = currentY;
             
-            requestAnimationFrame(() => {
-                updateConnections();
-                updateTruthTable();
-            });
+            // Update connections when dragging
+            updateConnections();
         }
 
         function stopDragging() {
@@ -468,55 +451,10 @@
             document.removeEventListener('mouseup', stopDragging);
         }
 
-        function updateConnections() {
-            // Remove all existing connection lines
-            connections.forEach(conn => conn.remove());
-            connections = [];
-            
-            // Redraw all connections
-            const drawnConnections = new Set();
-            
-            // Draw connections for NAND gates
-            nodes.forEach(node => {
-                if (node.dataset.type === 'nand') {
-                    const input1 = nodes.find(n => n.id === node.dataset.input1);
-                    const input2 = nodes.find(n => n.id === node.dataset.input2);
-                    
-                    if (input1) {
-                        const connKey = `${input1.id}-${node.id}`;
-                        if (!drawnConnections.has(connKey)) {
-                            drawConnection(input1, node);
-                            drawnConnections.add(connKey);
-                        }
-                    }
-                    if (input2) {
-                        const connKey = `${input2.id}-${node.id}`;
-                        if (!drawnConnections.has(connKey)) {
-                            drawConnection(input2, node);
-                            drawnConnections.add(connKey);
-                        }
-                    }
-                }
-            });
-            
-            // Draw connections to output nodes
-            outputNodes.forEach(output => {
-                const input1 = nodes.find(n => n.id === output.dataset.input1);
-                const input2 = nodes.find(n => n.id === output.dataset.input2);
-                
-                if (input1) {
-                    drawConnection(input1, output);
-                }
-                if (input2) {
-                    drawConnection(input2, output);
-                }
-            });
-        }
-
         function updateTruthTable() {
             console.log('Updating truth table...');
             const table = document.getElementById('truth-table-content');
-            const goal = GOALS[currentGoal];
+            const goal = GOALS.xor;  // Use XOR directly since it's our only goal
             
             let html = '<table><tr><th>Input A</th><th>Input B</th><th>Target</th><th>Current</th></tr>';
             
@@ -543,16 +481,9 @@
             table.innerHTML = html;
         }
 
-        // Update the checkCircuit function to also update the truth table
-        const originalCheckCircuit = checkCircuit;
-        function checkCircuit() {
-            originalCheckCircuit();
-            updateTruthTable();
-        }
-
         // Initialize
         createTooltip();
-        setGoal('xor');
+        resetGame();
 
         function findPaths(startNode) {
             const paths = [];
@@ -623,9 +554,9 @@
         async function sendBallFromNode(node) {
             console.log(`Sending ball from node: ${node.id}, type: ${node.dataset.type}`);
             // Flash the source node
-            node.style.transform = node.dataset.type === 'output' ? 'translateX(-50%) scale(1.2)' : 'scale(1.2)';
+            node.style.transform = 'scale(1.2)';
             await new Promise(resolve => setTimeout(resolve, 100));
-            node.style.transform = node.dataset.type === 'output' ? 'translateX(-50%)' : '';
+            node.style.transform = '';
             
             // Find all children of this node
             const children = findChildNodes(node);
@@ -653,11 +584,6 @@
                         // Send ball from this NAND node to its children
                         await sendBallFromNode(child);
                     }
-                } else if (child.dataset.type === 'output') {
-                    // Update output node value
-                    child.dataset.value = node.dataset.value;
-                    child.textContent = node.dataset.value;
-                    checkCircuit();
                 }
                 
                 ball.remove();
@@ -698,9 +624,9 @@
             await new Promise(resolve => setTimeout(resolve, 500));
             
             // Flash the destination node
-            toNode.style.transform = toNode.dataset.type === 'output' ? 'translateX(-50%) scale(1.2)' : 'scale(1.2)';
+            toNode.style.transform = 'scale(1.2)';
             await new Promise(resolve => setTimeout(resolve, 100));
-            toNode.style.transform = toNode.dataset.type === 'output' ? 'translateX(-50%)' : '';
+            toNode.style.transform = '';
         }
 
         function createBall(startNode) {
