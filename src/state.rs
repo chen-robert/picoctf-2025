@@ -4,7 +4,8 @@ use crate::err;
 
 pub struct State<'a> {
     pub data: &'a mut [u8],
-    pub updates: u64
+    pub updates: u64,
+    pub total_updates: u64
 }
 
 impl State<'_> {
@@ -12,7 +13,7 @@ impl State<'_> {
         self.updates = 0;
 
         loop {
-            json_to_println!("./verilog/output.json");
+            json_to_println!("./verilog/cpu.json");
 
             if self.updates == 0 {
                 break;
@@ -29,7 +30,10 @@ impl State<'_> {
         if self.data[y] != nxt {
             self.data[y] = nxt;
             self.updates += 1;
+            self.total_updates += 1;
         }
+
+
         Ok(())
     }
 

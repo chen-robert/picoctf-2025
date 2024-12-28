@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::state::State;
 use crate::assembler::assemble;
 
-const MODULE_NAME: &str = "counter";
+const MODULE_NAME: &str = "cpu";
 pub const MEM_SIZE: usize = 65536;
 
 pub fn get_bits_from_json(json: &Value, signal_name: &str) -> Result<Vec<i32>, Box<dyn Error>> {
@@ -59,10 +59,11 @@ pub fn run_test_program_with_expectations(
 
     let mut state = State {
         data: &mut data,
-        updates: 0
+        updates: 0,
+        total_updates: 0,
     };
 
-    let file_path = "./verilog/output.json";
+    let file_path = "./verilog/cpu.json";
     let json_content = fs::read_to_string(file_path)?;
     let json: Value = serde_json::from_str(&json_content)?;
 
@@ -75,6 +76,7 @@ pub fn run_test_program_with_expectations(
     let rst_bit = get_single_bit_from_json(&json, "reset")?;
     let write_enable_bit = get_single_bit_from_json(&json, "write_enable")?;
     let halted_bit = get_single_bit_from_json(&json, "halted")?;
+    let flag_bit = get_single_bit_from_json(&json, "flag")?;
 
     let registers = [
         get_bits_from_json(&json, "registers[0]")?,
@@ -89,6 +91,8 @@ pub fn run_test_program_with_expectations(
     state.flip(rst_bit)?;
     state.tick()?;
 
+    let mut first = true;
+
     for _ in 0..cycles {
         state.flip(clk)?;
         state.tick()?;
@@ -100,15 +104,27 @@ pub fn run_test_program_with_expectations(
         for (i, reg_bits) in registers.iter().enumerate() {
             reg_values[i] = i32::try_from(state.get(reg_bits.iter())?).unwrap();
         }
+        if current_state == 0 && state.data[usize::try_from(clk).unwrap()] == 0 {
+            println!("PC: {:04x} | R0: {:04x} R1: {:04x} R2: {:04x} R3: {:04x}",
+                program_counter,
+                reg_values[0],
+                reg_values[1],
+                reg_values[2],
+                reg_values[3]);
+        }
             
         if let Some(states) = expected_states {
-            if current_state_idx < states.len() && current_state == 0 && state.data[usize::try_from(clk).unwrap()] == 0 {
-                let (expected_pc, expected_regs) = states[current_state_idx];
-                assert!(program_counter == u64::try_from(expected_pc).unwrap());
-                for (i, (&expected, &actual)) in expected_regs.iter().zip(reg_values.iter()).enumerate() {
-                    assert_eq!(expected, actual, "Register {} mismatch at PC {}", i, expected_pc);
+            if current_state_idx < states.len() && current_state == 1 && state.data[usize::try_from(clk).unwrap()] == 0 {
+                if first {
+                    first = false;
+                } else {
+                    let (expected_pc, expected_regs) = states[current_state_idx];
+                    assert!(program_counter == u64::try_from(expected_pc).unwrap());
+                    for (i, (&expected, &actual)) in expected_regs.iter().zip(reg_values.iter()).enumerate() {
+                        assert_eq!(expected, actual, "Register {} mismatch at PC {}", i, expected_pc);
+                    }
+                    current_state_idx += 1;
                 }
-                current_state_idx += 1;
             }
         }
 
@@ -133,6 +149,10 @@ pub fn run_test_program_with_expectations(
             println!("HALTED");
             break;
         }
+
+        if state.data[usize::try_from(flag_bit).unwrap()] == 255 {
+            println!("FLAG");
+        }
     }
 
     if let Some(states) = expected_states {
@@ -144,6 +164,8 @@ pub fn run_test_program_with_expectations(
             assert_eq!(mem[addr], expected_val);
         }
     }
+
+    println!("Total updates: {}", state.total_updates);
 
     Ok(())
 }

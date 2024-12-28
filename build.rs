@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../verilog/output.json");
+    println!("cargo:rerun-if-changed=../verilog/cpu.json");
 }

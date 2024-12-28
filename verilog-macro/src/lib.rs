@@ -15,8 +15,10 @@ pub fn json_to_println(input: TokenStream) -> TokenStream {
     let json: Value = serde_json::from_str(&json_content)
         .expect("Failed to parse JSON");
 
+    println!("file path: {}", file_path);
+
     // Navigate to `cells` in the JSON structure
-    let cells = json["modules"]["counter"]["cells"]
+    let cells = json["modules"]["cpu"]["cells"]
         .as_object()
         .expect("Expected cells to be an object");
 

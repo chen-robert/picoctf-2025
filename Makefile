@@ -1,5 +1,5 @@
 build:
-	cd ./verilog/OnlyNandYosysSynth/OnlyNandYosysSynth/ && yosys ./synth_counter.ys && cp tmp.json ../../output.json
+	cd ./verilog && yosys ./synth_cpu.ys
 	cargo test 
 	cargo r
 
