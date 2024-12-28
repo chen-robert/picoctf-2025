@@ -19,6 +19,8 @@ pub enum Instruction {
     Load { dest: u8, src: u8 },
     Jz { reg: u8, addr: u8 },
     LoadW { dest: u8, imm: u16 },
+    Gt { dest: u8, src1: u8, src2: u8 },
+    Flag,
     Invalid,
 }
 
@@ -113,8 +115,19 @@ fn parse_instruction(parts: &[&str], labels: &LabelMap) -> Result<Instruction, B
             let addr = parse_immediate(parts[2], labels)?;
             Ok(Instruction::Jz { reg, addr })
         }
-        "INVALID" => {
-            assert!(parts.len() == 1, "INVALID takes no arguments");
+        "GT" => {
+            assert!(parts.len() == 4, "GT requires 3 register arguments");
+            let dest = parse_register(parts[1])?;
+            let src1 = parse_register(parts[2])?;
+            let src2 = parse_register(parts[3])?;
+            Ok(Instruction::Gt { dest, src1, src2 })
+        },
+        "FLAG" => {
+            assert!(parts.len() == 1, "FLAG takes no arguments");
+            Ok(Instruction::Flag)
+        },
+        "HLT" => {
+            assert!(parts.len() == 1, "HLT takes no arguments");
             Ok(Instruction::Invalid)
         }
         _ => Err(err!(format!("Unknown instruction: {}", parts[0])))
@@ -192,8 +205,17 @@ fn encode_instruction(inst: Instruction) -> u16 {
             ((dest as u64) << 4) |      // reg_dest (4 bits)
             (0b1101u64)                 // LOADW opcode (0xD)
         }
+        Instruction::Gt { dest, src1, src2 } => {
+            ((src2 as u64) << 12) |      // reg_src2 (3 bits) [14:12]
+            ((src1 as u64) << 8) |       // reg_src1 (3 bits) [10:8]
+            ((dest as u64) << 4) |       // reg_dest (3 bits) [6:4]
+            (0b0111u64)                  // GT opcode (0x7)
+        },
+        Instruction::Flag => {
+            0b1110u64                   // FLAG opcode (0xE)
+        },
         Instruction::Invalid => {
-            0b1111u64                   // INVALID opcode (0xF)
+            0b1111u64                   // INVALID/HLT opcode (0xF)
         }
     };
     encoded as u16

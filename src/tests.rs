@@ -128,19 +128,16 @@ fn test_store() -> Result<(), Box<dyn Error>> {
 fn test_invalid() -> Result<(), Box<dyn Error>> {
     let test_program = "\
         LOADI r0 42     ; R0 = 42
-        INVALID        ; Should do nothing
-        LOADI r1 0      ; R1 = 0 (memory address)
-        STORE r1 r0      ; Store R0 to memory at address in R1
+        LOADW r1 0x100  ; R1 = 0x100 (memory address)
+        STORE r1 r0     ; This store should execute (42 -> 0x100)
+        HLT            ; Should halt the processor
+        LOADI r0 99    ; Should not execute
+        STORE r1 r0     ; Should not execute this store
     ";
 
-    let expected_states = [
-        (2, &[42, 0, 0, 0]),  // After LOADI
-        (4, &[42, 0, 0, 0]),  // After INVALID (unchanged)
-        (6, &[42, 0, 0, 0]),  // After second LOADI
-        (8, &[42, 0, 0, 0]),  // After STORE (unchanged)
-    ];
-
-    run_test_program(test_program, 500, &expected_states)
+    run_test_program_with_memory(test_program, 500, &[
+        (0x100, 42)    // Memory at address 0x100 should be 42 from the first store
+    ])
 }
 
 #[test]
@@ -479,4 +476,53 @@ fn test_nand() -> Result<(), Box<dyn Error>> {
     ];
 
     run_test_program(test_program, 500, &expected_states)
+}
+
+#[test]
+fn test_gt() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        ; Test GT when r0 > r1 (should store 1)
+        LOADI r0 10     ; r0 = 10
+        LOADI r1 5      ; r1 = 5
+        GT r2 r0 r1     ; r2 = (r0 > r1) ? 1 : 0
+        
+        ; Test GT when r0 <= r1 (should store 0)
+        LOADI r0 5      ; r0 = 5
+        LOADI r1 10     ; r1 = 10
+        GT r2 r0 r1     ; r3 = (r0 > r1) ? 1 : 0
+        
+        ; Test GT when r0 = r1 (should store 0)
+        LOADI r0 5      ; r0 = 5
+        LOADI r1 5      ; r1 = 5
+        GT r3 r0 r1     ; r4 = (r0 > r1) ? 1 : 0
+    ";
+
+    let expected_states = [
+        (2, &[10, 0, 0, 0]),    // After first LOADI r0
+        (4, &[10, 5, 0, 0]),    // After first LOADI r1
+        (6, &[10, 5, 1, 0]),    // After first GT (10 > 5 = true)
+        (8, &[5, 5, 1, 0]),     // After second LOADI r0
+        (10, &[5, 10, 1, 0]),   // After second LOADI r1
+        (12, &[5, 10, 0, 0]),   // After second GT (5 > 10 = false)
+        (14, &[5, 10, 0, 0]),    // After third LOADI r0
+        (16, &[5, 5, 0, 0]),    // After third LOADI r1
+        (18, &[5, 5, 0, 0]),    // After third GT (5 > 5 = false)
+    ];
+
+    run_test_program(test_program, 500, &expected_states)
+}
+
+#[test]
+fn test_flag() -> Result<(), Box<dyn Error>> {
+    let test_program = "\
+        LOADI r0 42     ; R0 = 42
+        LOADW r1 0x100  ; R1 = 0x100 (memory address)
+        FLAG           ; Set the flag
+        STORE r1 r0     ; Store 42 to memory
+        HLT            ; Stop execution
+    ";
+
+    run_test_program_with_memory(test_program, 500, &[
+        (0x100, 42)    // Memory at address 0x100 should be 42
+    ])
 }

@@ -72,8 +72,6 @@ pub fn json_to_println(input: TokenStream) -> TokenStream {
         }
     };
 
-    println!("DONE");
-
     output.into()
 }
 

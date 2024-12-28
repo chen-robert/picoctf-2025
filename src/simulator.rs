@@ -74,6 +74,7 @@ pub fn run_test_program_with_expectations(
     let program_counter_bits = get_bits_from_json(&json, "program_counter")?;
     let rst_bit = get_single_bit_from_json(&json, "reset")?;
     let write_enable_bit = get_single_bit_from_json(&json, "write_enable")?;
+    let halted_bit = get_single_bit_from_json(&json, "halted")?;
 
     let registers = [
         get_bits_from_json(&json, "registers[0]")?,
@@ -105,7 +106,7 @@ pub fn run_test_program_with_expectations(
                 let (expected_pc, expected_regs) = states[current_state_idx];
                 assert!(program_counter == u64::try_from(expected_pc).unwrap());
                 for (i, (&expected, &actual)) in expected_regs.iter().zip(reg_values.iter()).enumerate() {
-                    assert_eq!(expected, actual);
+                    assert_eq!(expected, actual, "Register {} mismatch at PC {}", i, expected_pc);
                 }
                 current_state_idx += 1;
             }
@@ -127,6 +128,15 @@ pub fn run_test_program_with_expectations(
         let high_byte = mem[usize::try_from(addr).unwrap() + 1];
         state.set(first_byte.iter(), low_byte)?;
         state.set(second_byte.iter(), high_byte)?;
+
+        if state.data[usize::try_from(halted_bit).unwrap()] == 255 {
+            println!("HALTED");
+            break;
+        }
+    }
+
+    if let Some(states) = expected_states {
+        assert_eq!(current_state_idx, states.len());
     }
 
     if let Some(memory) = expected_memory {

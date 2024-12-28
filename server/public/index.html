@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NAND Pachinko</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
         * {
             box-sizing: border-box;
@@ -11,162 +12,41 @@
             padding: 0;
         }
 
-        body {
-            margin: 0;
-            padding: 20px;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: #0f172a;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            color: #60a5fa;
-            text-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
-        }
-
-        .description {
-            color: #94a3b8;
-            margin-bottom: 2rem;
-            text-align: center;
-            max-width: 600px;
-            line-height: 1.5;
-        }
-
         #game-container {
             width: 900px;
             height: 600px;
             margin: 0 auto;
-            background: #1e293b;
-            border-radius: 16px;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                        0 2px 4px -1px rgba(0, 0, 0, 0.06),
-                        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
         }
 
         .node {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
             position: absolute;
             cursor: move;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 1.2rem;
-            transition: box-shadow 0.3s ease, transform 0.3s ease;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2),
-                        0 0 0 2px rgba(255, 255, 255, 0.1) inset;
             user-select: none;
             touch-action: none;
             will-change: transform, left, top;
         }
 
-        .input-node {
-            background: #22c55e;
-            color: #fff;
-        }
-
-        .input-node:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
-        }
-
-        .nand-node {
-            background: #3b82f6;
-            color: #fff;
-        }
-
-        .nand-node:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
-        }
-
-        .selected {
-            border: 3px solid #fbbf24;
-            box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
         .connection {
             position: absolute;
             height: 3px;
-            background: linear-gradient(90deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.3) 100%);
             transform-origin: left center;
             pointer-events: none;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-        }
-
-        #controls {
-            text-align: center;
-            margin: 20px 0;
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-
-        button {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                        0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-
-        button:hover {
-            background: #2563eb;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15),
-                        0 3px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        #reset-btn {
-            background: #ef4444;
-        }
-
-        #reset-btn:hover {
-            background: #dc2626;
         }
 
         .tooltip {
             position: absolute;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 0.8rem;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s;
         }
 
         .output-node {
-            background: #f97316;
-            color: #fff;
             position: absolute;
             bottom: 80px;
             left: 50%;
@@ -174,54 +54,11 @@
             z-index: 10;
         }
 
-        .output-node:hover {
-            transform: translateX(-50%) scale(1.1);
-            box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
-        }
-
-        .output-node.snap-target {
-            box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
-            transform: translateX(-50%) scale(1.2);
-            transition: all 0.3s ease;
-        }
-
         .goal-display {
             position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.5);
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            color: #94a3b8;
-        }
-
-        .correct {
-            background: #22c55e;
-            animation: correct-pulse 1s infinite;
-        }
-
-        @keyframes correct-pulse {
-            0% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.6); }
-            100% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
-        }
-
-        #goal-select {
-            margin: 0 10px;
-            padding: 12px 24px;
-            border-radius: 8px;
-            background: #1e293b;
-            color: white;
-            border: 1px solid #3b82f6;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-        }
-
-        #goal-select:hover {
-            border-color: #60a5fa;
         }
 
         .game-wrapper {
@@ -231,18 +68,8 @@
         }
 
         .truth-table {
-            background: #1e293b;
             padding: 1.5rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                        0 2px 4px -1px rgba(0, 0, 0, 0.06);
             min-width: 300px;
-        }
-
-        .truth-table h2 {
-            margin: 0 0 1rem 0;
-            color: #60a5fa;
-            font-size: 1.5rem;
         }
 
         .truth-table table {
@@ -250,26 +77,11 @@
             border-collapse: collapse;
             margin-top: 1rem;
             font-family: monospace;
-            font-size: 1.1rem;
         }
 
         .truth-table th, .truth-table td {
             padding: 0.75rem;
             text-align: center;
-            border: 1px solid #334155;
-        }
-
-        .truth-table th {
-            background: #334155;
-            color: #94a3b8;
-        }
-
-        .truth-table td {
-            color: #fff;
-        }
-
-        .truth-table tr.current {
-            background: #1e40af;
         }
 
         .node {
@@ -277,44 +89,13 @@
             touch-action: none;
         }
 
-        .node.dragging {
-            transition: none;
-            opacity: 0.8;
-            z-index: 1000;
-            transform: scale(1.1);
-            box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.4),
-                        0 0 0 2px rgba(255, 255, 255, 0.2) inset;
-        }
-
         .ball {
             width: 12px;
             height: 12px;
-            background: radial-gradient(circle at 30% 30%, #fbbf24, #d97706);
-            border-radius: 50%;
             position: absolute;
             pointer-events: none;
-            box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
             z-index: 100;
             will-change: transform, left, top;
-        }
-
-        .ball.moving {
-            transition: transform 0.5s linear;
-        }
-
-        #play-btn {
-            background: #fbbf24;
-            color: #1e293b;
-        }
-
-        #play-btn:hover {
-            background: #f59e0b;
-        }
-
-        #play-btn:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
-            transform: none;
         }
     </style>
 </head>
@@ -661,6 +442,7 @@
                     }
                     
                     checkCircuit();
+                    updateTruthTable(); // Automatically update the truth table after merging
                     return;
                 }
             }
@@ -732,6 +514,7 @@
         }
 
         function updateTruthTable() {
+            console.log('Updating truth table...');
             const table = document.getElementById('truth-table-content');
             const goal = GOALS[currentGoal];
             
