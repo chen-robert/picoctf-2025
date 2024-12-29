@@ -1,11 +1,15 @@
 use std::error::Error;
 use std::fs;
+use std::env;
 use verilog_ctf::simulator::{run_program, MEM_SIZE};
 use verilog_ctf::assembler::assemble;
+use reqwest;
+use serde_json::json;
 
 mod tests;
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let program = fs::read_to_string("programs/nand_checker.asm")?;
 
     let prog2 = "\
@@ -60,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         idx += 1;
     }
 
-    for (a, b, c) in circuit_base {
+    for (a, b, c) in circuit_base.clone() {
         mem[addr] = (a & 0xFF) as u8;
         mem[addr + 1] = ((a >> 8) & 0xFF) as u8;
         mem[addr + 2] = (b & 0xFF) as u8;
@@ -97,6 +101,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     dump_memory(&mem, 0x2000, 0x20);
     dump_memory(&mem, 0x3000, 0x30);
     dump_memory(&mem, 0x0, 0x80);
+
+    // Convert circuit_base to the format expected by the /check endpoint
+    let circuit: Vec<_> = circuit_base.iter().map(|(input1, input2, output)| {
+        json!({
+            "input1": input1,
+            "input2": input2,
+            "output": output
+        })
+    }).collect();
+
+    // Get endpoint URL from environment variable or use default
+    let endpoint = env::var("ENDPOINT").unwrap_or_else(|_| "http://localhost:3000/check".to_string());
+
+    // Submit the circuit to the /check endpoint
+    let client = reqwest::Client::new();
+    let response = client.post(endpoint)
+        .json(&json!({ "circuit": circuit }))
+        .send()
+        .await?;
+
+    let result = response.json::<serde_json::Value>().await?;
+    println!("Server response: {:?}", result);
 
     Ok(())
 }

@@ -37,7 +37,6 @@ async function testFlag() {
     `;
 
     const binary = await assembleProgram(program);
-    console.log('Assembled binary:', [...binary]);
     
     const memory = new Uint8Array(65536);
     memory.set(binary);
@@ -49,8 +48,6 @@ async function testFlag() {
     assert.strictEqual(memory[0x100], 123, 'Memory at address 0x100 should be 123');
     assert.strictEqual(memory[0xFFFF], 255, 'Memory at max address should be 255');
     
-    
-    console.log('Memory operations test passed!');
 }
 
 testFlag(); 

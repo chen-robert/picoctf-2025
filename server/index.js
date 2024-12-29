@@ -1,103 +1,63 @@
 const express = require('express');
-const cors = require('cors');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs').promises;
 const { 
-    loadCpuSignals, 
-    getBitsValue, 
-    setBits, 
-    splitBits,
     checkInt,
     serializeCircuit
 } = require('./utils');
-
-const { process } = require('./wasm/pkg/verilog_ctf_wasm.js');
-const MEM_SIZE = 65536;
-
-// Load environment variables
-dotenv.config();
+const { runCPU } = require('./cpu');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy' });
-});
-
-function runCPU(memory) {
-  const state = new Uint8Array(100_000);
-  const signals = loadCpuSignals();
-
-  // Reset sequence
-  process(state);
-  state[signals.reset] = 255;
-  process(state);
-  state[signals.reset] = 0;
-  process(state);
-
-  let flag = false;
-  const MAX_CYCLES = 500000;
-
-  for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
-    // Toggle clock
-    state[signals.clock] ^= 255;
-    process(state);
-
-    // On clock low edge
-    if (state[signals.clock] === 0) {
-      // Handle memory writes
-      if (state[signals.write_enable] === 255) {
-        const addr = getBitsValue(state, signals.addr);
-        const val = getBitsValue(state, signals.out_val);
-        memory[addr] = val & 0xFF;
-        memory[addr + 1] = (val >> 8) & 0xFF;
-      }
-
-      // Handle memory reads
-      const addr = getBitsValue(state, signals.addr);
-      const [first_byte, second_byte] = splitBits(signals.inp_val, 8);
-      setBits(state, first_byte, memory[addr]);
-      setBits(state, second_byte, memory[addr + 1]);
-
-      // Check halted and flag
-      if (state[signals.halted] === 255) {
-        break;
-      }
-      if (state[signals.flag] === 255) {
-        flag = true;
-      }
-    }
-  }
-
-  return flag;
-}
-
-const OUTPUT_START = 0x1000;
-const CIRCUIT_STATE = 0x2000;
-const CIRCUIT_START = 0x3000;
+const FLAG1 = process.env.FLAG1 || 'FLAG1';
+const FLAG2 = process.env.FLAG2 || 'FLAG2';
 
 function doRun(res, memory) {
   const flag = runCPU(memory);
+  const result = memory[0x1000] | (memory[0x1001] << 8);
+  if (memory.length < 0x1000) {
+    return res.status(500).json({ error: 'Memory length is too short' });
+  }
+
+  let resp = "";
 
   if (flag) {
-    res.status(200).json({ status: 'success', flag: 'TODO' });
+    resp += FLAG2 + "\n";
   } else {
-    res.status(200).json({ status: 'success', flag: 'TODO' });
+    if (result === 0x1337) {
+      resp += FLAG1 + "\n";
+    } else if (result === 0x3333) {
+      resp += "wrong answer :(\n";
+    } else {
+      resp += "unknown error code: " + result;
+    }
   }
+
+  res.status(200).json({ status: 'success', flag: resp });
 }
 
+// Admin endpoint
+app.post('/flag', async (req, res) => {
+  if (req.body.flag1 !== FLAG1 || req.body.flag2 !== FLAG2) {
+    return res.status(400).json({ error: 'Invalid password' });
+  }
+
+  const binary = await fs.readFile('./programs/flag.bin');
+  const memory = new Uint8Array(binary.length);
+  memory.set(binary);
+
+  doRun(res, memory);
+});
+
 // Add the check endpoint
-app.post('/check', (req, res) => {
+app.post('/check', async (req, res) => {
     const circuit = req.body.circuit;
 
     if (!Array.isArray(circuit) || 
@@ -107,32 +67,31 @@ app.post('/check', (req, res) => {
         return res.status(400).end();
     }
 
-    const serialized = serializeCircuit(circuit);
-    console.log('Received valid circuit:', circuit);
-    console.log('Serialized words:', [...serialized]);
-    console.log('Raw bytes:', [...new Uint8Array(serialized.buffer)]);
-    res.json({ status: 'received' });
-});
+    const program = await fs.readFile('./programs/nand_checker.bin');
+    
+    // Generate random input state with only 0x0000 or 0xffff values
+    const inputState = new Uint16Array(4);
+    for (let i = 0; i < 4; i++) {
+        inputState[i] = Math.random() < 0.5 ? 0x0000 : 0xffff;
+    }
+    
+    // Create output state as inverse of input
+    const outputState = new Uint16Array(4);
+    for (let i = 0; i < 4; i++) {
+        outputState[i] = inputState[i] === 0xffff ? 0x0000 : 0xffff;
+    }
+    
+    const serialized = serializeCircuit(
+        circuit,
+        program,
+        inputState,
+        outputState
+    );
 
-// Catch-all route to serve index.html
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Something broke!',
-    message: err.message 
-  });
+    doRun(res, serialized);
 });
 
 // Start server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
-});
-
-module.exports = {
-  runCPU
-}; 
+}); 

@@ -6,21 +6,13 @@ function loadCpuSignals() {
     const json = JSON.parse(fs.readFileSync(path.join(__dirname, '../verilog/cpu.json'), 'utf8'));
     return {
         clock: getBitFromJson(json, "clock"),
-        state: getBitsFromJson(json, "state"),
         addr: getBitsFromJson(json, "addr"),
         inp_val: getBitsFromJson(json, "inp_val"),
         out_val: getBitsFromJson(json, "out_val"),
-        program_counter: getBitsFromJson(json, "program_counter"),
         reset: getBitFromJson(json, "reset"),
         write_enable: getBitFromJson(json, "write_enable"),
         halted: getBitFromJson(json, "halted"),
         flag: getBitFromJson(json, "flag"),
-        registers: [
-            getBitsFromJson(json, "registers[0]"),
-            getBitsFromJson(json, "registers[1]"),
-            getBitsFromJson(json, "registers[2]"),
-            getBitsFromJson(json, "registers[3]"),
-        ]
     };
 }
 
@@ -68,15 +60,31 @@ function checkInt(value) {
     return value > 0 && value <= 0xFFFF;
 }
 
-function serializeCircuit(circuit) {
-    const words = new Uint16Array(circuit.length * 3);
+function serializeCircuit(circuit, program, inputState, outputState) {
+    const memory = new Uint8Array(65536); // 64KB memory
+
+    // Copy program at start
+    memory.set(program);
+
+    // Serialize output state at 0x1000
+const outputView = new Uint16Array(memory.buffer, 0x1000);
+    outputView[0] = outputState.length;
+    outputView.set(outputState, 1);
+
+    // Serialize input state at 0x2000
+    const inputView = new Uint16Array(memory.buffer, 0x2000);
+    inputView.set(inputState, outputState.length + 1);
+
+    // Serialize circuit at 0x3000
+    const circuitView = new Uint16Array(memory.buffer, 0x3000);
     circuit.forEach((gate, i) => {
         const offset = i * 3;
-        words[offset] = gate.input1;
-        words[offset + 1] = gate.input2;
-        words[offset + 2] = gate.output;
+        circuitView[offset] = gate.input1;
+        circuitView[offset + 1] = gate.input2;
+        circuitView[offset + 2] = gate.output;
     });
-    return words;
+
+    return memory;
 }
 
 module.exports = {

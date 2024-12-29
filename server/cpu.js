@@ -5,7 +5,7 @@ const {
     splitBits,
 } = require('./utils');
 
-const { process } = require('../wasm/pkg/verilog_ctf_wasm.js');
+const { process } = require('./wasm/pkg/verilog_ctf_wasm.js');
 
 function runCPU(memory) {
     const state = new Uint8Array(100_000);

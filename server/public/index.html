@@ -3,31 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NAND Pachinko</title>
+    <title>NAND Simulator</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>NAND Pachinko</h1>
-    <p class="description">
-        Build an XOR gate using NAND gates! Connect nodes to create NAND gates and try to match the target outputs.
-        Drag nodes to rearrange them, and connect them to create your circuit.
-    </p>
+    <h1>NAND Simulator</h1>
     <div id="controls">
         <button id="reset-btn" onclick="resetGame()">Reset Circuit</button>
         <button onclick="addIntermediateNode()">Add Intermediate Node</button>
         <button id="play-btn" onclick="playAnimation()">Play Animation</button>
+        <button id="submit-btn" onclick="submitCircuit()">Submit Circuit</button>
     </div>
     <div class="game-wrapper">
-        <div class="circuit-info">
-            <h2>Circuit Layout</h2>
-            <div id="circuit-serialization"></div>
-        </div>
         <div id="game-container">
             <div class="goal-display"></div>
-        </div>
-        <div class="truth-table">
-            <h2>Truth Table</h2>
-            <div id="truth-table-content"></div>
         </div>
     </div>
 
@@ -46,14 +35,8 @@
 
         // Constants
         const GOALS = {
-            xor: {
-                description: 'XOR Gate: Output should be 1 when inputs are different',
-                truthTable: [
-                    { inputs: [0, 0], output: 0 },
-                    { inputs: [0, 1], output: 1 },
-                    { inputs: [1, 0], output: 1 },
-                    { inputs: [1, 1], output: 0 }
-                ]
+            flip: {
+                description: 'Flip the outputs!'
             }
         };
 
@@ -69,9 +52,13 @@
             node.dataset.type = type;
             node.id = 'node-' + Math.random().toString(36).substr(2, 9);
             
-            node.dataset.nodeId = type === 'output' ? '1' : nextNodeId.toString();
+            if (type === 'output') {
+                node.dataset.nodeId = (outputNodes.length + 1).toString();
+            } else {
+                node.dataset.nodeId = nextNodeId.toString();
+                nextNodeId++;
+            }
             node.textContent = node.dataset.nodeId;
-            if (type !== 'output') nextNodeId++;
             
             node.addEventListener('mousedown', startDragging);
             node.addEventListener('click', () => handleNodeClick(node));
@@ -92,7 +79,11 @@
         function createOutputNodes() {
             const containerWidth = 900;
             const containerHeight = 600;
-            createNode(containerWidth/2, containerHeight - 150, '?', 'output');
+            const spacing = 150;
+            const startX = containerWidth/2 - (spacing * 1.5);
+            for (let i = 0; i < 4; i++) {
+                createNode(startX + (i * spacing), containerHeight - 150, '?', 'output');
+            }
         }
 
         // Node Value Updates
@@ -174,12 +165,6 @@
                 selectedNode = node;
                 node.classList.add('selected');
             } else if (selectedNode !== node) {
-                if (node.dataset.nodeId === '2' || node.dataset.nodeId === '3') {
-                    selectedNode.classList.remove('selected');
-                    selectedNode = null;
-                    return;
-                }
-                
                 const existingInputs = [];
                 if (node.dataset.input1) existingInputs.push(node.dataset.input1);
                 if (node.dataset.input2) existingInputs.push(node.dataset.input2);
@@ -197,9 +182,6 @@
                     } else {
                         node.dataset.value = selectedNode.dataset.value;
                     }
-                    checkCircuit();
-                    updateCircuitSerialization();
-                    updateTruthTable();
                 }
                 
                 selectedNode.classList.remove('selected');
@@ -447,17 +429,18 @@
             outputNodes = [];
             connections = [];
             selectedNode = null;
-            nextNodeId = 2;
+            nextNodeId = 5; // Start after output nodes (1-4)
 
-            for (let i = 0; i < 2; i++) {
-                const x = Math.random() * 800 + 50;
+            const spacing = 150;
+            const startX = 100;
+            for (let i = 0; i < 4; i++) {
+                const x = startX + (i * spacing);
                 const y = Math.random() * 100 + 50;
                 const value = Math.round(Math.random());
                 createNode(x, y, value, 'input');
             }
             createOutputNodes();
             updateGoalDisplay();
-            updateCircuitSerialization();
         }
 
         function updateGoalDisplay() {
@@ -476,6 +459,53 @@
         // Initialize
         createTooltip();
         resetGame();
+
+        async function submitCircuit() {
+            // Convert nodes to circuit format
+            const circuit = [];
+            
+            // Add NAND gates
+            nodes.forEach(node => {
+                if (node.dataset.input1 && node.dataset.input2) {
+                    circuit.push({
+                        input1: parseInt(nodes.find(n => n.id === node.dataset.input1)?.dataset.nodeId),
+                        input2: parseInt(nodes.find(n => n.id === node.dataset.input2)?.dataset.nodeId),
+                        output: parseInt(node.dataset.nodeId)
+                    });
+                }
+            });
+
+            // Add all output nodes
+            outputNodes.forEach((outputNode, index) => {
+                if (outputNode.dataset.input1 && outputNode.dataset.input2) {
+                    circuit.push({
+                        input1: parseInt(nodes.find(n => n.id === outputNode.dataset.input1)?.dataset.nodeId),
+                        input2: parseInt(nodes.find(n => n.id === outputNode.dataset.input2)?.dataset.nodeId),
+                        output: index + 1  // Output nodes are numbered 1-4
+                    });
+                }
+            });
+
+            try {
+                const response = await fetch('/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ circuit })
+                });
+
+                const result = await response.json();
+                if (result.flag) {
+                    alert('Congratulations! Flag: ' + result.flag);
+                } else {
+                    alert('Circuit submitted successfully!');
+                }
+            } catch (error) {
+                console.error('Error submitting circuit:', error);
+                alert('Error submitting circuit. Please try again.');
+            }
+        }
     </script>
 </body>
 </html>  
