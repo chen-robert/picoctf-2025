@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-quote = "*"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "parsing"] }
 
 [lib]
 proc-macro = true

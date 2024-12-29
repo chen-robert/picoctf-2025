@@ -2,27 +2,40 @@ use proc_macro::TokenStream;
 use quote::quote;
 use serde_json::Value;
 use std::fs;
+use syn::{parse_macro_input, parse::Parse, parse::ParseStream, Token, LitStr, Expr};
+
+struct MacroInput {
+    json_path: LitStr,
+    _comma: Token![,],
+    func: Expr,
+}
+
+impl Parse for MacroInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(MacroInput {
+            json_path: input.parse()?,
+            _comma: input.parse()?,
+            func: input.parse()?,
+        })
+    }
+}
 
 #[proc_macro]
-pub fn json_to_println(input: TokenStream) -> TokenStream {
-    // Parse the input (JSON file path as a string literal)
-    let input_str = input.to_string();
-    let file_path = input_str.trim_matches('"');
-
-    // Read and parse the JSON file
-    let json_content = fs::read_to_string(file_path)
+pub fn synth_cpu(input: TokenStream) -> TokenStream {
+    let MacroInput { json_path, func, .. } = parse_macro_input!(input as MacroInput);
+    
+    // Read and parse the JSON file 
+    let json_content = fs::read_to_string(json_path.value())
         .expect("Failed to read the JSON file");
     let json: Value = serde_json::from_str(&json_content)
         .expect("Failed to parse JSON");
-
-    println!("file path: {}", file_path);
 
     // Navigate to `cells` in the JSON structure
     let cells = json["modules"]["cpu"]["cells"]
         .as_object()
         .expect("Expected cells to be an object");
 
-    // Generate println! statements for each cell
+    // Generate statements for each cell
     let mut statements = Vec::new();
     for (_cell_name, cell_data) in cells {
         let cell_type = cell_data["type"].as_str().unwrap_or("unknown");
@@ -58,14 +71,13 @@ pub fn json_to_println(input: TokenStream) -> TokenStream {
         };
 
         let input1 = get("A");
-        let input2 = get("B");
+        let input2 = get("B"); 
         let output = get("Y");
 
         statements.push(quote! {
-            self.nand(#input1, #input2, #output)?;
+            #func(#input1, #input2, #output);
         });
     }
-
 
     // Generate the final token stream
     let output = quote! {
@@ -76,7 +88,6 @@ pub fn json_to_println(input: TokenStream) -> TokenStream {
 
     output.into()
 }
-
 
 #[cfg(test)]
 mod tests {

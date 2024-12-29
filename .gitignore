@@ -1,3 +1,8 @@
+# Rust
 /target
-verilog/cpu.json
-server/node_modules
+/server/wasm/target
+/server/wasm/pkg
+
+# Node
+/server/node_modules
+

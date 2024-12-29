@@ -1,5 +1,5 @@
 use std::error::Error;
-use verilog_macro::json_to_println;
+use verilog_macro::synth_cpu;
 use crate::err;
 
 pub struct State<'a> {
@@ -13,7 +13,7 @@ impl State<'_> {
         self.updates = 0;
 
         loop {
-            json_to_println!("./verilog/cpu.json");
+            synth_cpu!("./verilog/cpu.json", self.nand);
 
             if self.updates == 0 {
                 break;
@@ -23,7 +23,7 @@ impl State<'_> {
         Ok(())
     }
 
-    pub fn nand(&mut self, a: usize, b: usize, y: usize) -> Result<(), Box<dyn Error>> {
+    pub fn nand(&mut self, a: usize, b: usize, y: usize) {
         let nxt = !(self.data[a] & self.data[b]);
         assert!(nxt == 0 || nxt == 255);
 
@@ -32,9 +32,6 @@ impl State<'_> {
             self.updates += 1;
             self.total_updates += 1;
         }
-
-
-        Ok(())
     }
 
     pub fn flip<I>(&mut self, idx: I) -> Result<(), Box<dyn Error>>
