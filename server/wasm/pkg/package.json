@@ -1,0 +1,11 @@
+{
+  "name": "verilog-ctf-wasm",
+  "version": "0.1.0",
+  "files": [
+    "verilog_ctf_wasm_bg.wasm",
+    "verilog_ctf_wasm.js",
+    "verilog_ctf_wasm.d.ts"
+  ],
+  "main": "verilog_ctf_wasm.js",
+  "types": "verilog_ctf_wasm.d.ts"
+}
