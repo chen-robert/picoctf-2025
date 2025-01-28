@@ -1,16 +1,20 @@
 # Pachinko
 
-- Namespace: TODO
-- ID: TODO
+- Namespace: picoctf
+- ID: pachinko
 - Type: custom
-- Category: Web
-- Points: TODO
+- Category: Web Exploitation
+- Points: 300
 - Templatable: no
-- MaxUsers: TODO
+- MaxUsers: 1
 
 ## Description
 
 History has failed us, but no matter.
+
+{{url_for("server.tar.gz", "Server source")}}
+
+There are two flags in this challenge. Submit flag one here, submit flag two in [Pachinko Revisited PLACEHOLDER](https://play.picoctf.org)
 
 ## Details
 
@@ -36,3 +40,4 @@ init: true
 
 - author: notdeghost
 - organization: OtterSec
+- event: picoCTF 2025
