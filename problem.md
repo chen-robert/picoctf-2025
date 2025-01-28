@@ -18,6 +18,7 @@ There are two flags in this challenge. Submit flag one here, submit flag two in 
 
 ## Details
 
+{{link_as('/', 'Website')}}
 
 ## Solution Overview
 
