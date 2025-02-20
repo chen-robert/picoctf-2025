@@ -13,8 +13,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let program = fs::read_to_string("programs/nand_checker.asm")?;
 
     let prog2 = "\
-    LOADW r7 0xf000 
-    LOADW r6 0xf000 
+    LOADW r7 0xf000
+    LOADW r6 0xf000
     LOADW r0 0x6F73 ; 'os'
     LOADW r1 0x6563 ; 'ec'
     LOADW r2 0x2E69 ; '.i'
@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         println!();
     }
-    
+
     println!("Assembly bytes:");
     for (i, byte) in assembly.iter().enumerate() {
         print!("{:04x}", byte);
@@ -112,7 +112,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }).collect();
 
     // Get endpoint URL from environment variable or use default
-    let endpoint = env::var("ENDPOINT").unwrap_or_else(|_| "http://localhost:3000/check".to_string());
+    let endpoint = env::var("REMOTE").unwrap_or_else(|_| "http://localhost:3000/check".to_string());
 
     // Submit the circuit to the /check endpoint
     let client = reqwest::Client::new();
